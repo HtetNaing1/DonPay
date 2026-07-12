@@ -1,0 +1,243 @@
+// DonPay data model — see PLAN.md "Data model (Prisma, core)".
+// Money rule: all fiat/token amounts are integers in minor units
+// (lamports / USDC micro-units / JPY as-is). Never floats.
+
+generator client {
+  provider     = "prisma-client"
+  output       = "../src/generated/prisma"
+  moduleFormat = "cjs"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Chain {
+  SOLANA
+}
+
+enum PayToken {
+  SOL
+  USDC
+}
+
+enum LinkType {
+  ONE_TIME
+  REUSABLE
+}
+
+enum AmountMode {
+  FIXED
+  PAYER_CHOOSES
+}
+
+enum LinkStatus {
+  ACTIVE
+  PAUSED
+  COMPLETED
+  EXPIRED
+}
+
+enum IntentStatus {
+  CREATED
+  PENDING
+  DETECTED
+  CONFIRMED
+  FINALIZED
+  EXPIRED
+  UNDERPAID
+  LATE_PAYMENT
+}
+
+enum WebhookDeliveryStatus {
+  PENDING
+  DELIVERED
+  FAILED
+  DEAD
+}
+
+enum NoncePurpose {
+  WALLET_VERIFY
+  WALLET_LOGIN
+}
+
+model Merchant {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  name         String
+  createdAt    DateTime @default(now())
+
+  wallets          WalletAddress[]
+  apiKeys          ApiKey[]
+  links            PaymentLink[]
+  intents          PaymentIntent[]
+  webhookEndpoints WebhookEndpoint[]
+}
+
+model WalletAddress {
+  id         String    @id @default(cuid())
+  merchantId String
+  address    String    @unique
+  chain      Chain     @default(SOLANA)
+  verifiedAt DateTime?
+  isDefault  Boolean   @default(false)
+
+  merchant Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+
+  @@index([merchantId])
+}
+
+model ApiKey {
+  id         String    @id @default(cuid())
+  merchantId String
+  keyHash    String
+  prefix     String    @unique // sk_... lookup handle; full key is never stored
+  label      String
+  createdAt  DateTime  @default(now())
+  revokedAt  DateTime?
+
+  merchant Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+
+  @@index([merchantId])
+}
+
+model PaymentLink {
+  id           String     @id @default(cuid())
+  merchantId   String
+  slug         String     @unique
+  type         LinkType
+  amountMode   AmountMode
+  fiatCurrency String // ISO 4217, e.g. USD, JPY
+  amountFiat   Int? // required when amountMode = FIXED
+  minFiat      Int? // PAYER_CHOOSES bounds
+  maxFiat      Int?
+  token        PayToken
+  note         String?
+  expiresAt    DateTime?
+  maxUses      Int?
+  useCount     Int        @default(0)
+  status       LinkStatus @default(ACTIVE)
+  createdAt    DateTime   @default(now())
+
+  merchant Merchant        @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  intents  PaymentIntent[]
+
+  @@index([merchantId, createdAt])
+}
+
+model PaymentIntent {
+  id             String       @id @default(cuid())
+  merchantId     String
+  linkId         String?
+  reference      String       @unique // per-intent key the chain watcher matches on
+  fiatCurrency   String
+  amountFiat     Int
+  token          PayToken
+  amountToken    BigInt
+  rateLocked     Decimal
+  rateSource     String
+  quoteExpiresAt DateTime
+  payoutAddress  String
+  status         IntentStatus @default(CREATED)
+  flags          String[] // OVERPAID, DUPLICATE_PAYMENT, ...
+  idempotencyKey String?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  merchant    Merchant           @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  link        PaymentLink?       @relation(fields: [linkId], references: [id], onDelete: SetNull)
+  payments    OnchainPayment[]
+  transitions IntentTransition[]
+  deliveries  WebhookDelivery[]
+
+  @@index([merchantId, createdAt])
+  @@index([status]) // watcher scans PENDING / tail-watch states
+  @@index([linkId])
+}
+
+model OnchainPayment {
+  id           String    @id @default(cuid())
+  intentId     String
+  txSignature  String    @unique
+  slot         BigInt
+  amountToken  BigInt
+  payerAddress String
+  detectedAt   DateTime  @default(now())
+  finalizedAt  DateTime?
+
+  intent PaymentIntent @relation(fields: [intentId], references: [id], onDelete: Cascade)
+
+  @@index([intentId])
+}
+
+// Append-only audit trail; written in the same transaction as the transition
+model IntentTransition {
+  id         String       @id @default(cuid())
+  intentId   String
+  fromStatus IntentStatus
+  toStatus   IntentStatus
+  event      String
+  createdAt  DateTime     @default(now())
+
+  intent PaymentIntent @relation(fields: [intentId], references: [id], onDelete: Cascade)
+
+  @@index([intentId, createdAt])
+}
+
+model WebhookEndpoint {
+  id         String   @id @default(cuid())
+  merchantId String
+  url        String
+  secret     String
+  active     Boolean  @default(true)
+  events     String[] // empty = all events
+
+  merchant   Merchant          @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  deliveries WebhookDelivery[]
+
+  @@index([merchantId])
+}
+
+// Outbox row — written in the same transaction as the state transition
+model WebhookDelivery {
+  id               String                @id @default(cuid())
+  endpointId       String
+  intentId         String
+  event            String
+  payload          Json
+  status           WebhookDeliveryStatus @default(PENDING)
+  attempts         Int                   @default(0)
+  nextAttemptAt    DateTime?
+  lastResponseCode Int?
+  createdAt        DateTime              @default(now())
+
+  endpoint WebhookEndpoint @relation(fields: [endpointId], references: [id], onDelete: Cascade)
+  intent   PaymentIntent   @relation(fields: [intentId], references: [id], onDelete: Cascade)
+
+  @@index([status, nextAttemptAt]) // dispatcher picks due PENDING/FAILED rows
+  @@index([endpointId, createdAt]) // delivery-log UI
+  @@index([intentId])
+}
+
+// Single-use, expiring, domain-bound nonces for wallet verify/login
+model AuthNonce {
+  id        String       @id @default(cuid())
+  address   String
+  nonce     String       @unique
+  purpose   NoncePurpose
+  expiresAt DateTime
+  usedAt    DateTime?
+
+  @@index([address])
+}
+
+model IdempotencyRecord {
+  key          String
+  merchantId   String
+  responseHash String
+  response     Json
+  createdAt    DateTime @default(now())
+
+  @@id([key, merchantId])
+}

@@ -3,3 +3,4 @@ dist/
 .next/
 pnpm-lock.yaml
 components/ui/
+apps/api/src/generated/
