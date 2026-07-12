@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { ArrowRight } from 'lucide-react';
+import { ThemeToggle } from '@/components/atoms/theme-toggle';
 import { IntentTicket } from '@/components/organisms/intent-ticket';
 import { cn } from '@/lib/utils';
 
@@ -82,6 +83,7 @@ export default function Home() {
               Developers
             </a>
           </div>
+          <ThemeToggle />
           <Link
             href="/dashboard"
             className={cn(cta, 'border border-hairline bg-surface px-4 py-2 hover:border-ink-soft')}

@@ -23,6 +23,7 @@
 }
 
 :root {
+  color-scheme: light;
   --dp-paper: #f4f6f5;
   --dp-surface: #ffffff;
   --dp-ink: #14201b;
@@ -34,8 +35,24 @@
   --dp-hairline: #dce2da;
 }
 
+/* Dark theme — .dark class set by next-themes (user choice or resolved system) */
+.dark {
+  color-scheme: dark;
+  --dp-paper: #0e1512;
+  --dp-surface: #17211b;
+  --dp-ink: #e9eeea;
+  --dp-ink-soft: #a3afa7;
+  --dp-brand: #34a57c;
+  --dp-brand-foreground: #0e1512;
+  --dp-brand-deep: #6fcba8;
+  --dp-pend: #d9a44a;
+  --dp-hairline: #26312a;
+}
+
+/* No-JS fallback: follow the system when no explicit theme class is present */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not(.light):not(.dark) {
+    color-scheme: dark;
     --dp-paper: #0e1512;
     --dp-surface: #17211b;
     --dp-ink: #e9eeea;
@@ -130,14 +147,14 @@
 }
 
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
+  --background: #0e1512;
+  --foreground: #e9eeea;
   --card: oklch(0.205 0 0);
   --card-foreground: oklch(0.985 0 0);
   --popover: oklch(0.205 0 0);
   --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
+  --primary: #34a57c;
+  --primary-foreground: #0e1512;
   --secondary: oklch(0.269 0 0);
   --secondary-foreground: oklch(0.985 0 0);
   --muted: oklch(0.269 0 0);
@@ -173,7 +190,6 @@
   html {
     @apply font-sans;
     scroll-behavior: smooth;
-    color-scheme: light dark;
   }
   @media (prefers-reduced-motion: reduce) {
     html {
