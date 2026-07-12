@@ -4,6 +4,52 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* DonPay brand tokens — "porcelain ledger".
+   Theme-aware tokens flip with the system color scheme; pine/porcelain are
+   constants for surfaces that stay dark in both modes (banner, dev panel). */
+@theme inline {
+  --color-paper: var(--dp-paper);
+  --color-surface: var(--dp-surface);
+  --color-ink: var(--dp-ink);
+  --color-ink-soft: var(--dp-ink-soft);
+  --color-brand: var(--dp-brand);
+  --color-brand-foreground: var(--dp-brand-foreground);
+  --color-brand-deep: var(--dp-brand-deep);
+  --color-pend: var(--dp-pend);
+  --color-hairline: var(--dp-hairline);
+  --color-pine: #14201b;
+  --color-porcelain: #f4f6f5;
+  --font-display: var(--font-instrument-serif), Georgia, 'Times New Roman', serif;
+}
+
+:root {
+  --dp-paper: #f4f6f5;
+  --dp-surface: #ffffff;
+  --dp-ink: #14201b;
+  --dp-ink-soft: #45524b;
+  --dp-brand: #10684e;
+  --dp-brand-foreground: #ffffff;
+  --dp-brand-deep: #0b4a38;
+  --dp-pend: #915e12;
+  --dp-hairline: #dce2da;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --dp-paper: #0e1512;
+    --dp-surface: #17211b;
+    --dp-ink: #e9eeea;
+    --dp-ink-soft: #a3afa7;
+    --dp-brand: #34a57c;
+    --dp-brand-foreground: #0e1512;
+    --dp-brand-deep: #6fcba8;
+    --dp-pend: #d9a44a;
+    --dp-hairline: #26312a;
+    --background: #0e1512;
+    --foreground: #e9eeea;
+  }
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -55,7 +101,7 @@
   --card-foreground: oklch(0.145 0 0);
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
+  --primary: #10684e;
   --primary-foreground: oklch(0.985 0 0);
   --secondary: oklch(0.97 0 0);
   --secondary-foreground: oklch(0.205 0 0);
@@ -126,5 +172,34 @@
   }
   html {
     @apply font-sans;
+    scroll-behavior: smooth;
+    color-scheme: light dark;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
+  }
+}
+
+/* Ticket state-rail entrance (respects reduced motion via component logic) */
+@keyframes ticket-row-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.ticket-row-in {
+  animation: ticket-row-in 320ms ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ticket-row-in {
+    animation: none;
   }
 }
