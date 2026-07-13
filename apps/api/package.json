@@ -20,14 +20,19 @@
   "dependencies": {
     "@donpay/shared": "workspace:*",
     "@nestjs/common": "^10.0.0",
+    "@nestjs/config": "^4.0.4",
     "@nestjs/core": "^10.0.0",
     "@nestjs/platform-express": "^10.0.0",
     "@prisma/adapter-pg": "^7.8.0",
     "@prisma/client": "^7.8.0",
     "argon2": "^0.44.0",
     "dotenv": "^17.4.2",
+    "nestjs-pino": "^4.6.1",
+    "pino": "^10.3.1",
+    "pino-http": "^11.0.0",
     "reflect-metadata": "^0.2.0",
-    "rxjs": "^7.8.1"
+    "rxjs": "^7.8.1",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@nestjs/cli": "^10.0.0",
@@ -42,6 +47,7 @@
     "eslint": "^8.0.0",
     "eslint-config-prettier": "^9.0.0",
     "eslint-plugin-prettier": "^5.0.0",
+    "pino-pretty": "^13.1.3",
     "prettier": "^3.0.0",
     "prisma": "^7.8.0",
     "source-map-support": "^0.5.21",
