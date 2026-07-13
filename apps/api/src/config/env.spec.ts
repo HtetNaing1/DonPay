@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { validateEnv } from './env';
 
-const VALID = { DATABASE_URL: 'postgresql://user:pw@host/db' };
+const VALID = {
+  DATABASE_URL: 'postgresql://user:pw@host/db',
+  AUTH_JWT_SECRET: 'a'.repeat(32),
+};
 
 describe('validateEnv', () => {
   it('applies defaults for optional variables', () => {
@@ -9,6 +12,13 @@ describe('validateEnv', () => {
     expect(env.NODE_ENV).toBe('development');
     expect(env.PORT).toBe(3000);
     expect(env.LOG_LEVEL).toBe('info');
+    expect(env.AUTH_SESSION_TTL_SECONDS).toBe(604800);
+  });
+
+  it('rejects a short AUTH_JWT_SECRET', () => {
+    expect(() => validateEnv({ ...VALID, AUTH_JWT_SECRET: 'short' })).toThrow(
+      /AUTH_JWT_SECRET/,
+    );
   });
 
   it('coerces PORT from string', () => {

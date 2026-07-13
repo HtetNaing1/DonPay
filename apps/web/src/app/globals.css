@@ -19,10 +19,11 @@
   --color-hairline: var(--dp-hairline);
   --color-pine: #14201b;
   --color-porcelain: #f4f6f5;
-  --font-display: var(--font-instrument-serif), Georgia, 'Times New Roman', serif;
+  --font-display: var(--font-bricolage), 'Avenir Next', 'Segoe UI', sans-serif;
 }
 
 :root {
+  color-scheme: light;
   --dp-paper: #f4f6f5;
   --dp-surface: #ffffff;
   --dp-ink: #14201b;
@@ -34,8 +35,24 @@
   --dp-hairline: #dce2da;
 }
 
+/* Dark theme — .dark class set by next-themes (user choice or resolved system) */
+.dark {
+  color-scheme: dark;
+  --dp-paper: #0e1512;
+  --dp-surface: #17211b;
+  --dp-ink: #e9eeea;
+  --dp-ink-soft: #a3afa7;
+  --dp-brand: #34a57c;
+  --dp-brand-foreground: #0e1512;
+  --dp-brand-deep: #6fcba8;
+  --dp-pend: #d9a44a;
+  --dp-hairline: #26312a;
+}
+
+/* No-JS fallback: follow the system when no explicit theme class is present */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not(.light):not(.dark) {
+    color-scheme: dark;
     --dp-paper: #0e1512;
     --dp-surface: #17211b;
     --dp-ink: #e9eeea;
@@ -53,9 +70,9 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-sans);
-  --font-mono: var(--font-geist-mono);
-  --font-heading: var(--font-sans);
+  --font-sans: var(--font-schibsted), 'Helvetica Neue', Arial, sans-serif;
+  --font-mono: var(--font-plex-mono), ui-monospace, 'SF Mono', monospace;
+  --font-heading: var(--font-bricolage), 'Avenir Next', 'Segoe UI', sans-serif;
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -130,14 +147,14 @@
 }
 
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
+  --background: #0e1512;
+  --foreground: #e9eeea;
   --card: oklch(0.205 0 0);
   --card-foreground: oklch(0.985 0 0);
   --popover: oklch(0.205 0 0);
   --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
+  --primary: #34a57c;
+  --primary-foreground: #0e1512;
   --secondary: oklch(0.269 0 0);
   --secondary-foreground: oklch(0.985 0 0);
   --muted: oklch(0.269 0 0);
@@ -170,10 +187,17 @@
   body {
     @apply bg-background text-foreground;
   }
+  /* Display face is a grotesque with no true italic — emphasis in headings
+     is carried by color, so suppress the synthesized slant. */
+  .font-display {
+    font-weight: 600;
+  }
+  .font-display em {
+    font-style: normal;
+  }
   html {
     @apply font-sans;
     scroll-behavior: smooth;
-    color-scheme: light dark;
   }
   @media (prefers-reduced-motion: reduce) {
     html {

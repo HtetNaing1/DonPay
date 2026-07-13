@@ -1,23 +1,27 @@
 import type { Metadata } from 'next';
-import { Geist, Geist_Mono, Instrument_Serif } from 'next/font/google';
+import { Bricolage_Grotesque, IBM_Plex_Mono, Schibsted_Grotesk } from 'next/font/google';
 import { DevnetBanner } from '@/components/atoms/devnet-banner';
+import { ThemeProvider } from '@/components/theme-provider';
 import './globals.css';
 
-const geistSans = Geist({
-  variable: '--font-geist-sans',
+/* Type system — "porcelain ledger":
+   Bricolage carries the voice in headings, Schibsted does the quiet UI work,
+   Plex Mono is the ledger itself (amounts, states, addresses). */
+const displayFont = Bricolage_Grotesque({
+  variable: '--font-bricolage',
+  subsets: ['latin'],
+  weight: ['500', '600', '700'],
+});
+
+const bodyFont = Schibsted_Grotesk({
+  variable: '--font-schibsted',
   subsets: ['latin'],
 });
 
-const geistMono = Geist_Mono({
-  variable: '--font-geist-mono',
+const monoFont = IBM_Plex_Mono({
+  variable: '--font-plex-mono',
   subsets: ['latin'],
-});
-
-const instrumentSerif = Instrument_Serif({
-  variable: '--font-instrument-serif',
-  subsets: ['latin'],
-  weight: '400',
-  style: ['normal', 'italic'],
+  weight: ['400', '500', '600'],
 });
 
 export const metadata: Metadata = {
@@ -32,12 +36,14 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <body
-        className={`${geistSans.variable} ${geistMono.variable} ${instrumentSerif.variable} antialiased`}
+        className={`${displayFont.variable} ${bodyFont.variable} ${monoFont.variable} antialiased`}
       >
-        <DevnetBanner />
-        {children}
+        <ThemeProvider>
+          <DevnetBanner />
+          {children}
+        </ThemeProvider>
       </body>
     </html>
   );

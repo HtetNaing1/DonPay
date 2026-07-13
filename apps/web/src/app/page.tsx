@@ -1,18 +1,12 @@
 import Link from 'next/link';
 import { ArrowRight } from 'lucide-react';
+import { ThemeToggle } from '@/components/atoms/theme-toggle';
+import { Wordmark } from '@/components/atoms/wordmark';
 import { IntentTicket } from '@/components/organisms/intent-ticket';
 import { cn } from '@/lib/utils';
 
 const cta =
   'inline-flex cursor-pointer items-center gap-2 rounded-md px-5 py-2.5 text-sm font-medium transition-colors duration-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand';
-
-function Wordmark({ className }: { className?: string }) {
-  return (
-    <span className={cn('font-display text-2xl tracking-tight', className)}>
-      DonPay<span className="text-brand">.</span>
-    </span>
-  );
-}
 
 const HAPPY_PATH = ['CREATED', 'PENDING', 'DETECTED', 'CONFIRMED', 'FINALIZED'];
 
@@ -82,6 +76,7 @@ export default function Home() {
               Developers
             </a>
           </div>
+          <ThemeToggle />
           <Link
             href="/dashboard"
             className={cn(cta, 'border border-hairline bg-surface px-4 py-2 hover:border-ink-soft')}

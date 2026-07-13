@@ -18,7 +18,7 @@ Living checklist. One or two tasks per session, top to bottom. Check off in the 
 - [ ] Prisma schema from PLAN.md; Neon DB; first migration; seed script (1 merchant, sample links)
 - [x] Shared Zod schemas + money utils (integer minor units) in `packages/shared` with unit tests
 - [x] Nest skeleton: domain modules, config module (env-validated), pino logging, problem+json error filter
-- [ ] Auth: signup/login (argon2, Auth.js on web side), session guard; onboarding stepper shell in web
+- [x] Auth: signup/login (argon2, Auth.js on web side), session guard; onboarding stepper shell in web
 - [ ] Nonce infrastructure: `AuthNonce` issue/verify/burn, structured message format, ed25519 verification — one implementation, two consumers
 - [ ] Wallet payout verification flow (wallet adapter in web + verify endpoint); multiple wallets, default flag
 - [ ] Wallet login (SIWS-style) as Auth.js credentials provider using the nonce infra
