@@ -15,7 +15,7 @@ Living checklist. One or two tasks per session, top to bottom. Check off in the 
 ## Week 1 — Foundation, auth, links
 
 - [x] Monorepo: pnpm workspaces, `apps/api` (NestJS), `apps/web` (Next.js + Tailwind + shadcn init), `packages/shared`; ESLint/Prettier/Vitest; CI running build + tests
-- [ ] Prisma schema from PLAN.md; Neon DB; first migration; seed script (1 merchant, sample links)
+- [x] Prisma schema from PLAN.md; Neon DB; first migration; seed script (1 merchant, sample links)
 - [x] Shared Zod schemas + money utils (integer minor units) in `packages/shared` with unit tests
 - [x] Nest skeleton: domain modules, config module (env-validated), pino logging, problem+json error filter
 - [x] Auth: signup/login (argon2, Auth.js on web side), session guard; onboarding stepper shell in web
