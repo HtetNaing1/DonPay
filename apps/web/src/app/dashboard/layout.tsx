@@ -80,7 +80,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
             <span className="font-mono text-[13px]">{session.user?.email}</span>
           </p>
           <div className="flex items-center gap-2">
-            <ThemeToggle className="border-none bg-transparent" />
+            <ThemeToggle />
             <SignOutButton />
           </div>
         </header>

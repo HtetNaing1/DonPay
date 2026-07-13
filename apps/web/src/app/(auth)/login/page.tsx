@@ -9,13 +9,18 @@ export const metadata: Metadata = {
 export default function LoginPage() {
   return (
     <div>
-      <h1 className="font-display text-3xl tracking-tight">Welcome back</h1>
-      <p className="mt-2 mb-8 text-[15px] text-ink-soft">
+      <h1 className="rise-in font-display text-3xl tracking-tight">Welcome back</h1>
+      <p
+        className="rise-in mt-2 mb-8 text-[15px] text-ink-soft"
+        style={{ '--rise-order': 1 } as React.CSSProperties}
+      >
         Sign in to your merchant dashboard.
       </p>
-      <Suspense>
-        <AuthForm mode="login" />
-      </Suspense>
+      <div className="rise-in" style={{ '--rise-order': 2 } as React.CSSProperties}>
+        <Suspense>
+          <AuthForm mode="login" />
+        </Suspense>
+      </div>
     </div>
   );
 }

@@ -49,7 +49,11 @@ export function OnboardingSteps() {
       </div>
       <ol className="divide-y divide-hairline">
         {STEPS.map((step, i) => (
-          <li key={step.title} className="flex gap-4 px-6 py-5">
+          <li
+            key={step.title}
+            className="rise-in flex gap-4 px-6 py-5"
+            style={{ '--rise-order': i + 1 } as React.CSSProperties}
+          >
             <span
               className={cn(
                 'mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full font-mono text-[13px]',

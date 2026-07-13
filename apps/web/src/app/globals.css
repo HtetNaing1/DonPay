@@ -19,6 +19,10 @@
   --color-hairline: var(--dp-hairline);
   --color-pine: #14201b;
   --color-porcelain: #f4f6f5;
+  /* Theme-constant accents for panels that invert with the theme:
+     mint reads on pine, evergreen reads on porcelain */
+  --color-mint: #6fcba8;
+  --color-evergreen: #0b4a38;
   --font-display: var(--font-bricolage), 'Avenir Next', 'Segoe UI', sans-serif;
 }
 
@@ -203,6 +207,30 @@
     html {
       scroll-behavior: auto;
     }
+  }
+}
+
+/* Page-load entrance for auth pages — same rise-and-settle language as the
+   hero ticket rows. Stagger via --rise-order (0, 1, 2, …). */
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.rise-in {
+  animation: rise-in 480ms ease-out both;
+  animation-delay: calc(var(--rise-order, 0) * 70ms);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rise-in {
+    animation: none;
   }
 }
 
