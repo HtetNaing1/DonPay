@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
-import { LoginInput, SignupInput } from '@donpay/shared';
+import { LoginInput, SignupInput, WalletVerifyInput } from '@donpay/shared';
 import * as argon2 from 'argon2';
 import { ERROR_CODES } from '../common/problem/error-codes';
 import { ProblemException } from '../common/problem/problem.exception';
@@ -12,6 +12,7 @@ import {
   toMerchantProfile,
 } from '../merchants/merchant-profile';
 import { PrismaService } from '../prisma/prisma.service';
+import { NonceService } from './nonce.service';
 
 export interface SessionResponse {
   accessToken: string;
@@ -30,6 +31,7 @@ export class AuthService {
     private readonly prisma: PrismaService,
     private readonly jwt: JwtService,
     private readonly config: ConfigService<Env, true>,
+    private readonly nonceService: NonceService,
   ) {}
 
   async signup(input: SignupInput): Promise<SessionResponse> {
@@ -70,6 +72,30 @@ export class AuthService {
       );
     }
     return this.createSession(merchant);
+  }
+
+  /**
+   * SIWS-style wallet login (PLAN.md FR-3): a valid WALLET_LOGIN signature
+   * opens a session for the merchant owning that *verified* payout wallet.
+   * Email stays the root identity — this is a second door, not a new account.
+   */
+  async walletLogin(input: WalletVerifyInput): Promise<SessionResponse> {
+    const { address } = await this.nonceService.consume(input, 'WALLET_LOGIN');
+
+    const wallet = await this.prisma.walletAddress.findFirst({
+      where: { address, verifiedAt: { not: null } },
+      include: { merchant: true },
+    });
+    if (!wallet) {
+      // same response for unknown and unverified addresses — the login
+      // endpoint must not double as a wallet-registration oracle
+      throw new ProblemException(
+        401,
+        ERROR_CODES.UNAUTHORIZED,
+        'No merchant account owns this wallet',
+      );
+    }
+    return this.createSession(wallet.merchant);
   }
 
   private async createSession(merchant: Merchant): Promise<SessionResponse> {

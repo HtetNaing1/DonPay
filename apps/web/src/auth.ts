@@ -16,6 +16,17 @@ interface ApiSession {
   merchant: { id: string; email: string; name: string };
 }
 
+/** Shared by both providers: turn the API session into an Auth.js user. */
+function toAuthUser(session: ApiSession) {
+  return {
+    id: session.merchant.id,
+    email: session.merchant.email,
+    name: session.merchant.name,
+    apiAccessToken: session.accessToken,
+    apiTokenExpiresAt: session.expiresAt,
+  };
+}
+
 /**
  * Auth.js holds the browser session; the NestJS API stays the only
  * authority on credentials. `authorize` forwards signup/login to the API and
@@ -58,13 +69,40 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         }
 
         const session = (await response.json()) as ApiSession;
-        return {
-          id: session.merchant.id,
-          email: session.merchant.email,
-          name: session.merchant.name,
-          apiAccessToken: session.accessToken,
-          apiTokenExpiresAt: session.expiresAt,
-        };
+        return toAuthUser(session);
+      },
+    }),
+    /**
+     * SIWS-style wallet login (second door — email stays the root identity).
+     * The panel signs the nonce message client-side; this just forwards the
+     * signed payload to the API, which verifies and burns the nonce.
+     */
+    Credentials({
+      id: 'wallet',
+      credentials: {
+        message: {},
+        signature: {},
+      },
+      async authorize(credentials) {
+        let message: unknown;
+        try {
+          message = JSON.parse(credentials.message as string);
+        } catch {
+          throw new ApiSignin('validation_failed');
+        }
+
+        const response = await fetch(apiUrl('/auth/wallet-login'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message, signature: credentials.signature }),
+        });
+        if (!response.ok) {
+          const problem = await readProblem(response);
+          throw new ApiSignin(problem.code);
+        }
+
+        const session = (await response.json()) as ApiSession;
+        return toAuthUser(session);
       },
     }),
   ],

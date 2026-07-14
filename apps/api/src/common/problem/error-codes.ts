@@ -11,6 +11,10 @@ export const ERROR_CODES = {
   CONFLICT: 'conflict',
   RATE_LIMITED: 'rate_limited',
   INTERNAL_ERROR: 'internal_error',
+  /** Nonce unknown, expired, already used, or bound to different address/purpose/domain. */
+  NONCE_INVALID: 'nonce_invalid',
+  /** ed25519 signature does not verify against the claimed address. */
+  SIGNATURE_INVALID: 'signature_invalid',
 } as const;
 
 export type ErrorCode = (typeof ERROR_CODES)[keyof typeof ERROR_CODES];

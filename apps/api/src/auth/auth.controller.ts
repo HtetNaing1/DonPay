@@ -4,13 +4,19 @@ import {
   Get,
   HttpCode,
   Post,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import {
+  IssuedNonce,
   LoginInput,
   loginSchema,
+  NonceRequestInput,
+  nonceRequestSchema,
   SignupInput,
   signupSchema,
+  WalletVerifyInput,
+  walletVerifySchema,
 } from '@donpay/shared';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
 import { Merchant } from '../generated/prisma/client';
@@ -20,11 +26,23 @@ import {
 } from '../merchants/merchant-profile';
 import { AuthService, SessionResponse } from './auth.service';
 import { CurrentMerchant } from './current-merchant.decorator';
+import { NonceService } from './nonce.service';
 import { SessionGuard } from './session.guard';
 
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(
+    private readonly authService: AuthService,
+    private readonly nonceService: NonceService,
+  ) {}
+
+  /** Challenge for wallet verify/login: sign `messageText`, then submit to the matching verify route. */
+  @Get('nonce')
+  nonce(
+    @Query(new ZodValidationPipe(nonceRequestSchema)) query: NonceRequestInput,
+  ): Promise<IssuedNonce> {
+    return this.nonceService.issue(query.address, query.purpose);
+  }
 
   @Post('signup')
   signup(
@@ -39,6 +57,15 @@ export class AuthController {
     @Body(new ZodValidationPipe(loginSchema)) body: LoginInput,
   ): Promise<SessionResponse> {
     return this.authService.login(body);
+  }
+
+  /** SIWS-style login: signed WALLET_LOGIN nonce → session for the merchant owning that verified wallet. */
+  @Post('wallet-login')
+  @HttpCode(200)
+  walletLogin(
+    @Body(new ZodValidationPipe(walletVerifySchema)) body: WalletVerifyInput,
+  ): Promise<SessionResponse> {
+    return this.authService.walletLogin(body);
   }
 
   /** Session probe for the web app's Auth.js session callback. */

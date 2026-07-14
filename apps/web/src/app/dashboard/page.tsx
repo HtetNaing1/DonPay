@@ -1,6 +1,8 @@
 import type { Metadata } from 'next';
+import type { MerchantWallet } from '@donpay/shared';
 import { auth } from '@/auth';
 import { OnboardingSteps } from '@/components/organisms/onboarding-steps';
+import { merchantApiFetch } from '@/lib/api-server';
 
 export const metadata: Metadata = {
   title: 'Payments — DonPay',
@@ -9,10 +11,12 @@ export const metadata: Metadata = {
 export default async function DashboardPage() {
   const session = await auth();
   const firstName = session?.user?.name?.split(' ')[0];
+  const walletsResult = await merchantApiFetch<MerchantWallet[]>('/merchants/me/wallets');
+  const walletVerified = walletsResult.ok && walletsResult.data.length > 0;
 
   return (
     <div className="space-y-8">
-      <div>
+      <div className="rise-in">
         <h1 className="font-display text-3xl tracking-tight">
           {firstName ? `Welcome, ${firstName}` : 'Welcome'}
         </h1>
@@ -21,9 +25,15 @@ export default async function DashboardPage() {
         </p>
       </div>
 
-      <OnboardingSteps />
+      <div className="rise-in" style={{ '--rise-order': 1 } as React.CSSProperties}>
+        <OnboardingSteps walletVerified={walletVerified} />
+      </div>
 
-      <section aria-labelledby="payments-heading">
+      <section
+        aria-labelledby="payments-heading"
+        className="rise-in"
+        style={{ '--rise-order': 2 } as React.CSSProperties}
+      >
         <div className="flex items-baseline justify-between">
           <h2 id="payments-heading" className="font-display text-lg tracking-tight">
             Payments

@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { Suspense } from 'react';
 import { AuthForm } from '@/components/organisms/auth-form';
+import { WalletLoginPanel } from '@/components/organisms/wallet-login-panel';
 
 export const metadata: Metadata = {
   title: 'Sign in — DonPay',
@@ -19,6 +20,11 @@ export default function LoginPage() {
       <div className="rise-in" style={{ '--rise-order': 2 } as React.CSSProperties}>
         <Suspense>
           <AuthForm mode="login" />
+        </Suspense>
+      </div>
+      <div className="rise-in mt-6" style={{ '--rise-order': 3 } as React.CSSProperties}>
+        <Suspense>
+          <WalletLoginPanel />
         </Suspense>
       </div>
     </div>
