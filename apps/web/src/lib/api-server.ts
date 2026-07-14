@@ -37,5 +37,8 @@ export async function merchantApiFetch<T>(
   if (!response.ok) {
     return { ok: false, problem: await readProblem(response) };
   }
-  return { ok: true, data: (await response.json()) as T };
+  // 204 (e.g. DELETE) carries no body
+  const data =
+    response.status === 204 ? (undefined as T) : ((await response.json()) as T);
+  return { ok: true, data };
 }

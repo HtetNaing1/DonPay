@@ -224,7 +224,9 @@
 }
 
 .rise-in {
-  animation: rise-in 480ms ease-out both;
+  /* backwards, not both: once settled, the retained transform would trap
+     popovers (dropdown/calendar) in a stacking context below later cards */
+  animation: rise-in 480ms ease-out backwards;
   animation-delay: calc(var(--rise-order, 0) * 70ms);
 }
 

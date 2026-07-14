@@ -15,7 +15,7 @@ import { cn } from '@/lib/utils';
 /** Sections beyond Payments and Wallets activate as their features land. */
 const NAV = [
   { label: 'Payments', icon: ArrowLeftRight, href: '/dashboard' },
-  { label: 'Payment links', icon: Link2 },
+  { label: 'Payment links', icon: Link2, href: '/dashboard/links' },
   { label: 'Webhooks', icon: Webhook },
   { label: 'API keys', icon: KeyRound, href: '/dashboard/api-keys' },
   { label: 'Wallets', icon: Wallet, href: '/dashboard/wallets' },
