@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import type { MerchantWallet } from '@donpay/shared';
+import type { MerchantWallet, PaymentLinkView } from '@donpay/shared';
 import { auth } from '@/auth';
 import { OnboardingSteps } from '@/components/organisms/onboarding-steps';
 import { merchantApiFetch } from '@/lib/api-server';
@@ -11,8 +11,12 @@ export const metadata: Metadata = {
 export default async function DashboardPage() {
   const session = await auth();
   const firstName = session?.user?.name?.split(' ')[0];
-  const walletsResult = await merchantApiFetch<MerchantWallet[]>('/merchants/me/wallets');
+  const [walletsResult, linksResult] = await Promise.all([
+    merchantApiFetch<MerchantWallet[]>('/merchants/me/wallets'),
+    merchantApiFetch<PaymentLinkView[]>('/merchants/me/links'),
+  ]);
   const walletVerified = walletsResult.ok && walletsResult.data.length > 0;
+  const hasLink = linksResult.ok && linksResult.data.length > 0;
 
   return (
     <div className="space-y-8">
@@ -26,7 +30,7 @@ export default async function DashboardPage() {
       </div>
 
       <div className="rise-in" style={{ '--rise-order': 1 } as React.CSSProperties}>
-        <OnboardingSteps walletVerified={walletVerified} />
+        <OnboardingSteps walletVerified={walletVerified} hasLink={hasLink} />
       </div>
 
       <section
