@@ -8,6 +8,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import {
+  IssuedNonce,
   LoginInput,
   loginSchema,
   NonceRequestInput,
@@ -23,7 +24,7 @@ import {
 } from '../merchants/merchant-profile';
 import { AuthService, SessionResponse } from './auth.service';
 import { CurrentMerchant } from './current-merchant.decorator';
-import { IssuedNonce, NonceService } from './nonce.service';
+import { NonceService } from './nonce.service';
 import { SessionGuard } from './session.guard';
 
 @Controller('auth')

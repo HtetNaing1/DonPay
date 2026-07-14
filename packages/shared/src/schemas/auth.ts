@@ -39,3 +39,12 @@ export const walletVerifySchema = z.object({
   signature: base58SignatureSchema,
 });
 export type WalletVerifyInput = z.infer<typeof walletVerifySchema>;
+
+/** Response of `GET /auth/nonce` — sign `messageText`, echo `message` back. */
+export const issuedNonceSchema = z.object({
+  message: walletSignaturePayloadSchema,
+  /** Exact string to pass to the wallet's signMessage (UTF-8 encode as-is). */
+  messageText: z.string().min(1),
+  expiresAt: z.iso.datetime(),
+});
+export type IssuedNonce = z.infer<typeof issuedNonceSchema>;

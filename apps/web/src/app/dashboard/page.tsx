@@ -1,6 +1,8 @@
 import type { Metadata } from 'next';
+import type { MerchantWallet } from '@donpay/shared';
 import { auth } from '@/auth';
 import { OnboardingSteps } from '@/components/organisms/onboarding-steps';
+import { merchantApiFetch } from '@/lib/api-server';
 
 export const metadata: Metadata = {
   title: 'Payments — DonPay',
@@ -9,6 +11,8 @@ export const metadata: Metadata = {
 export default async function DashboardPage() {
   const session = await auth();
   const firstName = session?.user?.name?.split(' ')[0];
+  const walletsResult = await merchantApiFetch<MerchantWallet[]>('/merchants/me/wallets');
+  const walletVerified = walletsResult.ok && walletsResult.data.length > 0;
 
   return (
     <div className="space-y-8">
@@ -21,7 +25,7 @@ export default async function DashboardPage() {
         </p>
       </div>
 
-      <OnboardingSteps />
+      <OnboardingSteps walletVerified={walletVerified} />
 
       <section aria-labelledby="payments-heading">
         <div className="flex items-baseline justify-between">

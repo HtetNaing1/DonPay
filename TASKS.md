@@ -20,7 +20,7 @@ Living checklist. One or two tasks per session, top to bottom. Check off in the 
 - [x] Nest skeleton: domain modules, config module (env-validated), pino logging, problem+json error filter
 - [x] Auth: signup/login (argon2, Auth.js on web side), session guard; onboarding stepper shell in web
 - [x] Nonce infrastructure: `AuthNonce` issue/verify/burn, structured message format, ed25519 verification — one implementation, two consumers
-- [ ] Wallet payout verification flow (wallet adapter in web + verify endpoint); multiple wallets, default flag
+- [x] Wallet payout verification flow (wallet adapter in web + verify endpoint); multiple wallets, default flag
 - [ ] Wallet login (SIWS-style) as Auth.js credentials provider using the nonce infra
 - [ ] API keys: generate (`sk_` prefix, hashed, shown once), revoke, ApiKeyGuard with constant-time compare
 - [ ] RateSource interface + CoinGecko implementation + cached quotes; QuoteService with 10-min lock

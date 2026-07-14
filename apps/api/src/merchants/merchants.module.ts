@@ -1,5 +1,14 @@
 import { Module } from '@nestjs/common';
+import { AuthModule } from '../auth/auth.module';
+import { CLOCK, SystemClock } from '../common/clock';
+import { MerchantsController } from './merchants.controller';
+import { WalletsService } from './wallets.service';
 
 /** Merchant profile, payout wallets (verify/default), API keys. */
-@Module({})
+@Module({
+  imports: [AuthModule],
+  controllers: [MerchantsController],
+  providers: [WalletsService, { provide: CLOCK, useClass: SystemClock }],
+  exports: [WalletsService],
+})
 export class MerchantsModule {}

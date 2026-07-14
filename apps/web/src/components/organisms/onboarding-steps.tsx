@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -5,35 +6,40 @@ interface Step {
   title: string;
   copy: string;
   status: 'done' | 'current' | 'locked';
-  action?: { label: string };
+  action?: { label: string; href?: string };
 }
 
 /**
  * Onboarding is a real sequence — each step unlocks the next — so the
- * numbering carries information. Wallet verification and link creation
- * activate as their features land.
+ * numbering carries information. Link creation activates when its feature
+ * lands.
  */
-const STEPS: Step[] = [
-  {
-    title: 'Create your account',
-    copy: 'Your merchant account is live on devnet.',
-    status: 'done',
-  },
-  {
-    title: 'Verify a payout wallet',
-    copy: 'Sign a one-time message with your Phantom wallet to prove you own the address payments will settle to.',
-    status: 'current',
-    action: { label: 'Verify wallet' },
-  },
-  {
-    title: 'Create your first payment link',
-    copy: 'A shareable URL and QR code that opens a hosted checkout paying your verified wallet.',
-    status: 'locked',
-    action: { label: 'Create link' },
-  },
-];
+function buildSteps(walletVerified: boolean): Step[] {
+  return [
+    {
+      title: 'Create your account',
+      copy: 'Your merchant account is live on devnet.',
+      status: 'done',
+    },
+    {
+      title: 'Verify a payout wallet',
+      copy: 'Sign a one-time message with your Phantom wallet to prove you own the address payments will settle to.',
+      status: walletVerified ? 'done' : 'current',
+      action: walletVerified
+        ? undefined
+        : { label: 'Verify wallet', href: '/dashboard/wallets' },
+    },
+    {
+      title: 'Create your first payment link',
+      copy: 'A shareable URL and QR code that opens a hosted checkout paying your verified wallet.',
+      status: walletVerified ? 'current' : 'locked',
+      action: { label: 'Create link' },
+    },
+  ];
+}
 
-export function OnboardingSteps() {
+export function OnboardingSteps({ walletVerified }: { walletVerified: boolean }) {
+  const steps = buildSteps(walletVerified);
   return (
     <section
       aria-labelledby="onboarding-heading"
@@ -44,11 +50,13 @@ export function OnboardingSteps() {
           Get set up
         </h2>
         <p className="mt-0.5 text-sm text-ink-soft">
-          Two steps between you and your first devnet payment.
+          {walletVerified
+            ? 'One step between you and your first devnet payment.'
+            : 'Two steps between you and your first devnet payment.'}
         </p>
       </div>
       <ol className="divide-y divide-hairline">
-        {STEPS.map((step, i) => (
+        {steps.map((step, i) => (
           <li
             key={step.title}
             className="rise-in flex gap-4 px-6 py-5"
@@ -76,16 +84,24 @@ export function OnboardingSteps() {
               </h3>
               <p className="mt-1 max-w-xl text-sm leading-relaxed text-ink-soft">{step.copy}</p>
             </div>
-            {step.action && (
-              <button
-                type="button"
-                disabled
-                title="Available soon in this devnet build"
-                className="h-9 shrink-0 self-center rounded-md border border-hairline bg-surface px-3.5 text-sm font-medium text-ink-soft/60"
-              >
-                {step.action.label}
-              </button>
-            )}
+            {step.action &&
+              (step.action.href ? (
+                <Link
+                  href={step.action.href}
+                  className="flex h-9 shrink-0 items-center self-center rounded-md bg-brand px-3.5 text-sm font-medium text-brand-foreground transition-colors duration-200 hover:bg-brand-deep focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
+                >
+                  {step.action.label}
+                </Link>
+              ) : (
+                <button
+                  type="button"
+                  disabled
+                  title="Available soon in this devnet build"
+                  className="h-9 shrink-0 self-center rounded-md border border-hairline bg-surface px-3.5 text-sm font-medium text-ink-soft/60"
+                >
+                  {step.action.label}
+                </button>
+              ))}
           </li>
         ))}
       </ol>

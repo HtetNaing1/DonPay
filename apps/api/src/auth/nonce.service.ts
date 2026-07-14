@@ -3,6 +3,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
   buildWalletSignMessage,
+  IssuedNonce,
   WalletSignaturePayload,
   WalletVerifyInput,
 } from '@donpay/shared';
@@ -14,14 +15,6 @@ import { ProblemException } from '../common/problem/problem.exception';
 import { Env } from '../config/env';
 import { NoncePurpose } from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-
-export interface IssuedNonce {
-  /** The structured payload the wallet signs — echo it back in the verify call. */
-  message: WalletSignaturePayload;
-  /** Exact string to pass to the wallet's signMessage (UTF-8 encode as-is). */
-  messageText: string;
-  expiresAt: string;
-}
 
 /**
  * Single-use, expiring, domain-bound nonces (CLAUDE.md rule 8).
