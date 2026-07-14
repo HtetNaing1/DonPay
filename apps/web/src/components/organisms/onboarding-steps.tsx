@@ -11,10 +11,9 @@ interface Step {
 
 /**
  * Onboarding is a real sequence — each step unlocks the next — so the
- * numbering carries information. Link creation activates when its feature
- * lands.
+ * numbering carries information.
  */
-function buildSteps(walletVerified: boolean): Step[] {
+function buildSteps(walletVerified: boolean, hasLink: boolean): Step[] {
   return [
     {
       title: 'Create your account',
@@ -32,14 +31,20 @@ function buildSteps(walletVerified: boolean): Step[] {
     {
       title: 'Create your first payment link',
       copy: 'A shareable URL and QR code that opens a hosted checkout paying your verified wallet.',
-      status: walletVerified ? 'current' : 'locked',
-      action: { label: 'Create link' },
+      status: hasLink ? 'done' : walletVerified ? 'current' : 'locked',
+      action: hasLink ? undefined : { label: 'Create link', href: '/dashboard/links' },
     },
   ];
 }
 
-export function OnboardingSteps({ walletVerified }: { walletVerified: boolean }) {
-  const steps = buildSteps(walletVerified);
+interface OnboardingStepsProps {
+  walletVerified: boolean;
+  hasLink: boolean;
+}
+
+export function OnboardingSteps({ walletVerified, hasLink }: OnboardingStepsProps) {
+  const steps = buildSteps(walletVerified, hasLink);
+  const remaining = steps.filter((step) => step.status !== 'done').length;
   return (
     <section
       aria-labelledby="onboarding-heading"
@@ -50,9 +55,11 @@ export function OnboardingSteps({ walletVerified }: { walletVerified: boolean })
           Get set up
         </h2>
         <p className="mt-0.5 text-sm text-ink-soft">
-          {walletVerified
-            ? 'One step between you and your first devnet payment.'
-            : 'Two steps between you and your first devnet payment.'}
+          {remaining === 0
+            ? 'You’re set up — share a link and payments will land in the ledger below.'
+            : remaining === 1
+              ? 'One step between you and your first devnet payment.'
+              : 'Two steps between you and your first devnet payment.'}
         </p>
       </div>
       <ol className="divide-y divide-hairline">

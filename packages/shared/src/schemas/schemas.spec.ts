@@ -6,6 +6,7 @@ import {
   createWebhookEndpointSchema,
   loginSchema,
   nonceRequestSchema,
+  paymentLinkFormSchema,
   signupSchema,
   solanaAddressSchema,
   updatePaymentLinkSchema,
@@ -165,6 +166,68 @@ describe('updatePaymentLinkSchema', () => {
 
   it('rejects an empty patch', () => {
     expect(updatePaymentLinkSchema.safeParse({}).success).toBe(false);
+  });
+});
+
+describe('paymentLinkFormSchema', () => {
+  const base = {
+    type: 'REUSABLE',
+    amountMode: 'FIXED',
+    fiatCurrency: 'USD',
+    token: 'USDC',
+    amountFiat: '25.00',
+    minFiat: '',
+    maxFiat: '',
+    note: '',
+    expiresAt: '',
+    maxUses: '',
+  };
+
+  it('converts major-unit strings into API minor units', () => {
+    const result = paymentLinkFormSchema.safeParse(base);
+    expect(result.success).toBe(true);
+    expect(result.data).toMatchObject({ amountFiat: 2500, type: 'REUSABLE' });
+    expect(result.data?.note).toBeUndefined();
+    expect(result.data?.maxUses).toBeUndefined();
+  });
+
+  it('respects currency decimals (JPY has none)', () => {
+    const jpy = { ...base, fiatCurrency: 'JPY', amountFiat: '1000' };
+    const result = paymentLinkFormSchema.safeParse(jpy);
+    expect(result.success).toBe(true);
+    expect(result.data?.amountFiat).toBe(1000);
+
+    const fractionalJpy = { ...base, fiatCurrency: 'JPY', amountFiat: '10.5' };
+    const failed = paymentLinkFormSchema.safeParse(fractionalJpy);
+    expect(failed.success).toBe(false);
+    expect(failed.error?.issues[0]?.path).toEqual(['amountFiat']);
+  });
+
+  it('rejects garbage amounts with a field-scoped issue', () => {
+    const result = paymentLinkFormSchema.safeParse({ ...base, amountFiat: 'abc' });
+    expect(result.success).toBe(false);
+    expect(result.error?.issues[0]?.path).toEqual(['amountFiat']);
+  });
+
+  it('applies the canonical cross-field rules (FIXED requires an amount)', () => {
+    const result = paymentLinkFormSchema.safeParse({ ...base, amountFiat: '' });
+    expect(result.success).toBe(false);
+    expect(result.error?.issues[0]?.path).toEqual(['amountFiat']);
+  });
+
+  it('parses PAYER_CHOOSES bounds and expiry', () => {
+    const result = paymentLinkFormSchema.safeParse({
+      ...base,
+      amountMode: 'PAYER_CHOOSES',
+      amountFiat: '',
+      minFiat: '5',
+      maxFiat: '100',
+      expiresAt: '2026-08-01T12:00',
+      maxUses: '10',
+    });
+    expect(result.success).toBe(true);
+    expect(result.data).toMatchObject({ minFiat: 500, maxFiat: 10000, maxUses: 10 });
+    expect(result.data?.expiresAt).toBeInstanceOf(Date);
   });
 });
 
