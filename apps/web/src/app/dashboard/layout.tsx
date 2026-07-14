@@ -5,6 +5,7 @@ import { auth } from '@/auth';
 import { SignOutButton } from '@/components/atoms/sign-out-button';
 import { ThemeToggle } from '@/components/atoms/theme-toggle';
 import { Wordmark } from '@/components/atoms/wordmark';
+import { DashboardMobileMenu } from '@/components/molecules/dashboard-mobile-menu';
 import { DashboardNav } from '@/components/molecules/dashboard-nav';
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -30,8 +31,9 @@ export default async function DashboardLayout({ children }: { children: React.Re
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex items-center justify-between gap-4 border-b border-hairline bg-surface px-6 py-3.5">
-          <div className="min-w-0 md:hidden">
+        <header className="sticky top-0 z-30 flex items-center justify-between gap-4 border-b border-hairline bg-surface px-6 py-3.5">
+          <div className="flex min-w-0 items-center gap-2 md:hidden">
+            <DashboardMobileMenu />
             <Wordmark className="text-lg" />
           </div>
           <p className="hidden min-w-0 truncate text-sm text-ink-soft md:block">

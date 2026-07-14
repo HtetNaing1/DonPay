@@ -15,16 +15,22 @@ export default async function WalletsPage() {
 
   return (
     <div className="space-y-8">
-      <div>
+      <div className="rise-in">
         <h1 className="font-display text-3xl tracking-tight">Payout wallets</h1>
         <p className="mt-1.5 text-[15px] text-ink-soft">
           Payments settle directly to these addresses — DonPay never takes custody.
         </p>
       </div>
 
-      <WalletConnectPanel />
+      <div className="rise-in" style={{ '--rise-order': 1 } as React.CSSProperties}>
+        <WalletConnectPanel />
+      </div>
 
-      <section aria-labelledby="wallets-heading">
+      <section
+        aria-labelledby="wallets-heading"
+        className="rise-in"
+        style={{ '--rise-order': 2 } as React.CSSProperties}
+      >
         <h2 id="wallets-heading" className="font-display text-lg tracking-tight">
           Verified wallets
         </h2>

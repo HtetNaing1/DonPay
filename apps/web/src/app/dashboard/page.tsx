@@ -16,7 +16,7 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-8">
-      <div>
+      <div className="rise-in">
         <h1 className="font-display text-3xl tracking-tight">
           {firstName ? `Welcome, ${firstName}` : 'Welcome'}
         </h1>
@@ -25,9 +25,15 @@ export default async function DashboardPage() {
         </p>
       </div>
 
-      <OnboardingSteps walletVerified={walletVerified} />
+      <div className="rise-in" style={{ '--rise-order': 1 } as React.CSSProperties}>
+        <OnboardingSteps walletVerified={walletVerified} />
+      </div>
 
-      <section aria-labelledby="payments-heading">
+      <section
+        aria-labelledby="payments-heading"
+        className="rise-in"
+        style={{ '--rise-order': 2 } as React.CSSProperties}
+      >
         <div className="flex items-baseline justify-between">
           <h2 id="payments-heading" className="font-display text-lg tracking-tight">
             Payments

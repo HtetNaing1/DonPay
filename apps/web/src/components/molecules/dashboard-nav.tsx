@@ -22,11 +22,11 @@ const NAV = [
   { label: 'Settings', icon: Settings },
 ] as const;
 
-export function DashboardNav() {
+export function DashboardNav({ className }: { className?: string }) {
   const pathname = usePathname();
 
   return (
-    <nav className="mt-8 flex-1" aria-label="Dashboard">
+    <nav className={cn('mt-8 flex-1', className)} aria-label="Dashboard">
       <ul className="space-y-1">
         {NAV.map(({ label, icon: Icon, ...item }) => {
           const href = 'href' in item ? item.href : undefined;
