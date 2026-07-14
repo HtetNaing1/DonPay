@@ -25,6 +25,12 @@ export const envSchema = z.object({
   LOG_LEVEL: z
     .enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace'])
     .default('info'),
+  COINGECKO_URL: z.url().default('https://api.coingecko.com/api/v3'),
+  /** Demo-tier key (x-cg-demo-api-key); optional — anonymous calls work at low volume. */
+  COINGECKO_API_KEY: z.string().optional(),
+  RATE_CACHE_TTL_SECONDS: z.coerce.number().int().positive().default(60),
+  /** How long an intent's locked rate stays valid (PLAN.md FR-6: 10 minutes). */
+  QUOTE_LOCK_SECONDS: z.coerce.number().int().positive().default(600),
 });
 
 export type Env = z.infer<typeof envSchema>;
