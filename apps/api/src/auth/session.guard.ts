@@ -55,7 +55,7 @@ export class SessionGuard implements CanActivate {
   }
 }
 
-function extractBearerToken(request: Request): string | undefined {
+export function extractBearerToken(request: Request): string | undefined {
   const header = request.headers.authorization;
   if (!header) return undefined;
   const [scheme, token] = header.split(' ');

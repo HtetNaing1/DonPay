@@ -17,7 +17,7 @@ const NAV = [
   { label: 'Payments', icon: ArrowLeftRight, href: '/dashboard' },
   { label: 'Payment links', icon: Link2 },
   { label: 'Webhooks', icon: Webhook },
-  { label: 'API keys', icon: KeyRound },
+  { label: 'API keys', icon: KeyRound, href: '/dashboard/api-keys' },
   { label: 'Wallets', icon: Wallet, href: '/dashboard/wallets' },
   { label: 'Settings', icon: Settings },
 ] as const;

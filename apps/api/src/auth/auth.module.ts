@@ -3,14 +3,16 @@ import { ConfigService } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
 import { CLOCK, SystemClock } from '../common/clock';
 import { Env } from '../config/env';
+import { ApiKeyGuard } from './api-key.guard';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { NonceService } from './nonce.service';
 import { SessionGuard } from './session.guard';
 
 /**
- * Signup/login (argon2) + dashboard session guard + nonce infrastructure.
- * Wallet verify/login and API keys land here in later tasks.
+ * Signup/login (argon2), nonce infrastructure, and both auth guards:
+ * SessionGuard (dashboard JWT) and ApiKeyGuard (`sk_` keys) — separate by
+ * design, no route accepts both (CLAUDE.md rule 9).
  */
 @Module({
   imports: [
@@ -29,8 +31,9 @@ import { SessionGuard } from './session.guard';
     AuthService,
     NonceService,
     SessionGuard,
+    ApiKeyGuard,
     { provide: CLOCK, useClass: SystemClock },
   ],
-  exports: [SessionGuard, JwtModule, NonceService],
+  exports: [SessionGuard, ApiKeyGuard, JwtModule, NonceService],
 })
 export class AuthModule {}
