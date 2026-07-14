@@ -9,7 +9,7 @@ Living checklist. One or two tasks per session, top to bottom. Check off in the 
 ## Week 0 — Design prep (½–1 day)
 
 - [ ] Walk through the full flow manually once: create a devnet wallet (Phantom), airdrop SOL, send a devnet USDC transfer, inspect it in explorer + via Helius API — know the raw material before abstracting it
-- [ ] Write `docs/evm-adapter-design.md` skeleton (deposit-address derivation, confirmation policy, ERC-20 log parsing) — capture the design while it's fresh
+- [x] Write `docs/evm-adapter-design.md` skeleton (deposit-address derivation, confirmation policy, ERC-20 log parsing) — capture the design while it's fresh
 - [ ] Wireframes: checkout page, dashboard payments list, link creation form, onboarding stepper
 
 ## Week 1 — Foundation, auth, links
