@@ -22,7 +22,7 @@ Living checklist. One or two tasks per session, top to bottom. Check off in the 
 - [x] Nonce infrastructure: `AuthNonce` issue/verify/burn, structured message format, ed25519 verification — one implementation, two consumers
 - [x] Wallet payout verification flow (wallet adapter in web + verify endpoint); multiple wallets, default flag
 - [x] Wallet login (SIWS-style) as Auth.js credentials provider using the nonce infra
-- [ ] API keys: generate (`sk_` prefix, hashed, shown once), revoke, ApiKeyGuard with constant-time compare
+- [x] API keys: generate (`sk_` prefix, hashed, shown once), revoke, ApiKeyGuard with constant-time compare
 - [ ] RateSource interface + CoinGecko implementation + cached quotes; QuoteService with 10-min lock
 - [ ] PaymentLink CRUD (API + dashboard form with QR download); slug generation; status logic (paused/expired/completed)
 - [ ] PaymentIntent creation: from API (with Idempotency-Key) and from link-open; reference generation; quote embedding
