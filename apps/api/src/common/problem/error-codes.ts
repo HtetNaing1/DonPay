@@ -15,6 +15,8 @@ export const ERROR_CODES = {
   NONCE_INVALID: 'nonce_invalid',
   /** ed25519 signature does not verify against the claimed address. */
   SIGNATURE_INVALID: 'signature_invalid',
+  /** Rate source is down and no cached rate is fresh enough to serve. */
+  RATE_UNAVAILABLE: 'rate_unavailable',
 } as const;
 
 export type ErrorCode = (typeof ERROR_CODES)[keyof typeof ERROR_CODES];
