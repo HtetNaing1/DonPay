@@ -19,6 +19,9 @@ export const envSchema = z.object({
     .int()
     .positive()
     .default(60 * 60 * 24 * 7),
+  /** Domain bound into wallet sign messages — must match what the web app renders. */
+  AUTH_DOMAIN: z.string().min(1).default('localhost:3000'),
+  AUTH_NONCE_TTL_SECONDS: z.coerce.number().int().positive().default(300),
   LOG_LEVEL: z
     .enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace'])
     .default('info'),
