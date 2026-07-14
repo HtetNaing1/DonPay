@@ -1,15 +1,15 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { WalletReadyState } from '@solana/wallet-adapter-base';
 import { PhantomWalletAdapter } from '@solana/wallet-adapter-phantom';
-import { useWallet, WalletProvider } from '@solana/wallet-adapter-react';
+import { WalletProvider } from '@solana/wallet-adapter-react';
 import bs58 from 'bs58';
 import {
   requestWalletNonce,
   verifyPayoutWallet,
 } from '@/app/dashboard/wallets/actions';
+import { usePhantomConnect } from '@/lib/use-phantom-connect';
 
 /** Maps the API's stable problem codes to copy the person can act on. */
 const ERROR_COPY: Record<string, string> = {
@@ -36,43 +36,21 @@ export function WalletConnectPanel() {
   );
 }
 
-type Phase = 'idle' | 'connecting' | 'signing' | 'verified';
+type Phase = 'idle' | 'signing' | 'verified';
 
 function PanelInner() {
   const router = useRouter();
-  const { wallets, wallet, select, connect, connected, connecting, publicKey, signMessage } =
-    useWallet();
+  const {
+    phantomInstalled,
+    connected,
+    connectPending,
+    connectError,
+    beginConnect,
+    publicKey,
+    signMessage,
+  } = usePhantomConnect();
   const [phase, setPhase] = useState<Phase>('idle');
   const [error, setError] = useState<string | null>(null);
-
-  const phantom = wallets.find((w) => w.adapter.name === 'Phantom');
-  const phantomInstalled =
-    phantom !== undefined &&
-    (phantom.readyState === WalletReadyState.Installed ||
-      phantom.readyState === WalletReadyState.Loadable);
-
-  // select() only marks the wallet; connect once the selection has landed.
-  useEffect(() => {
-    if (phase !== 'connecting' || !wallet || connected || connecting) return;
-    connect().catch((cause: unknown) => {
-      setPhase('idle');
-      setError(
-        cause instanceof Error && cause.name === 'WalletConnectionError'
-          ? 'Phantom declined the connection. Approve it in the popup to continue.'
-          : FALLBACK_ERROR,
-      );
-    });
-  }, [phase, wallet, connected, connecting, connect]);
-
-  const handleConnect = () => {
-    setError(null);
-    if (!phantom || !phantomInstalled) {
-      setError('Phantom isn’t installed in this browser.');
-      return;
-    }
-    setPhase('connecting');
-    select(phantom.adapter.name);
-  };
 
   const handleSignAndVerify = async () => {
     if (!publicKey || !signMessage) {
@@ -112,6 +90,8 @@ function PanelInner() {
     }
   };
 
+  const shownError = error ?? connectError;
+
   return (
     <section
       aria-labelledby="wallet-verify-heading"
@@ -132,11 +112,11 @@ function PanelInner() {
           <>
             <button
               type="button"
-              onClick={handleConnect}
-              disabled={phase === 'connecting' || connecting}
+              onClick={beginConnect}
+              disabled={connectPending}
               className="inline-flex h-10 cursor-pointer items-center justify-center rounded-md bg-brand px-4 text-sm font-medium text-brand-foreground transition-colors duration-200 hover:bg-brand-deep focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand disabled:cursor-default disabled:opacity-60"
             >
-              {phase === 'connecting' || connecting ? 'Connecting…' : 'Connect Phantom'}
+              {connectPending ? 'Connecting…' : 'Connect Phantom'}
             </button>
             {!phantomInstalled && (
               <p className="text-sm text-ink-soft">
@@ -176,12 +156,12 @@ function PanelInner() {
         )}
       </div>
 
-      {error && (
+      {shownError && (
         <p
           role="alert"
           className="mx-6 mb-5 rounded-md border border-destructive/30 bg-destructive/5 px-3.5 py-2.5 text-[13px] text-destructive"
         >
-          {error}
+          {shownError}
         </p>
       )}
       {phase === 'verified' && (

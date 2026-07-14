@@ -15,6 +15,8 @@ import {
   nonceRequestSchema,
   SignupInput,
   signupSchema,
+  WalletVerifyInput,
+  walletVerifySchema,
 } from '@donpay/shared';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
 import { Merchant } from '../generated/prisma/client';
@@ -55,6 +57,15 @@ export class AuthController {
     @Body(new ZodValidationPipe(loginSchema)) body: LoginInput,
   ): Promise<SessionResponse> {
     return this.authService.login(body);
+  }
+
+  /** SIWS-style login: signed WALLET_LOGIN nonce → session for the merchant owning that verified wallet. */
+  @Post('wallet-login')
+  @HttpCode(200)
+  walletLogin(
+    @Body(new ZodValidationPipe(walletVerifySchema)) body: WalletVerifyInput,
+  ): Promise<SessionResponse> {
+    return this.authService.walletLogin(body);
   }
 
   /** Session probe for the web app's Auth.js session callback. */
