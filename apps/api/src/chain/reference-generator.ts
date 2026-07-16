@@ -7,7 +7,7 @@
  */
 export interface ReferenceGenerator {
   /** A fresh, globally unique reference in the chain's address encoding. */
-  generate(): string;
+  generateReference(): string;
 }
 
 export const REFERENCE_GENERATOR = Symbol('REFERENCE_GENERATOR');

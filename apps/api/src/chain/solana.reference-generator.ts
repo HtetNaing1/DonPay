@@ -11,7 +11,7 @@ import { ReferenceGenerator } from './reference-generator';
  */
 @Injectable()
 export class SolanaReferenceGenerator implements ReferenceGenerator {
-  generate(): string {
+  generateReference(): string {
     return bs58.encode(nacl.sign.keyPair().publicKey);
   }
 }

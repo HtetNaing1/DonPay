@@ -5,7 +5,9 @@ import { SolanaReferenceGenerator } from './solana.reference-generator';
 describe('SolanaReferenceGenerator', () => {
   it('mints base58-encoded 32-byte public keys, unique per call', () => {
     const generator = new SolanaReferenceGenerator();
-    const references = Array.from({ length: 100 }, () => generator.generate());
+    const references = Array.from({ length: 100 }, () =>
+      generator.generateReference(),
+    );
 
     for (const reference of references) {
       expect(bs58.decode(reference)).toHaveLength(32);
