@@ -70,6 +70,15 @@ function intentRow(data: Record<string, unknown>): PaymentIntent {
     id: 'pi_1',
     merchantId: MERCHANT_ID,
     linkId: null,
+    reference: REFERENCE,
+    fiatCurrency: 'USD',
+    amountFiat: 2500,
+    token: 'USDC',
+    amountToken: 25_000_000n,
+    rateLocked: '1',
+    rateSource: 'coingecko',
+    quoteExpiresAt: QUOTE.lockedUntil,
+    payoutAddress: PAYOUT_ADDRESS,
     status: 'CREATED',
     flags: [],
     note: null,
@@ -94,8 +103,16 @@ function makeService() {
       create: vi.fn(({ data }: { data: Record<string, unknown> }) =>
         Promise.resolve(intentRow(data)),
       ),
+      update: vi.fn(({ data }: { data: Record<string, unknown> }) =>
+        Promise.resolve(intentRow(data)),
+      ),
       findFirst: vi.fn(),
+      findUniqueOrThrow: vi.fn(),
     },
+    intentTransition: {
+      create: vi.fn().mockResolvedValue(undefined),
+    },
+    $queryRaw: vi.fn(),
     idempotencyRecord: {
       findUnique: vi.fn().mockResolvedValue(null),
       create: vi.fn().mockResolvedValue(undefined),
@@ -108,7 +125,7 @@ function makeService() {
   const quoteService = {
     createQuote: vi.fn().mockResolvedValue(QUOTE),
   };
-  const referenceGenerator = { generate: vi.fn(() => REFERENCE) };
+  const referenceGenerator = { generateReference: vi.fn(() => REFERENCE) };
   const clock: Clock = { now: () => NOW };
   const config = {
     get: vi.fn(() => 'https://pay.test'),
@@ -331,6 +348,104 @@ describe('PaymentIntentService.openLink', () => {
 
     expect(prisma.paymentLink.update).not.toHaveBeenCalled();
     expect(prisma.paymentLink.updateMany).not.toHaveBeenCalled();
+  });
+});
+
+describe('PaymentIntentService.transition', () => {
+  function lockReturns(
+    prisma: ReturnType<typeof makeService>['prisma'],
+    status: string,
+    flags: string[] = [],
+  ) {
+    prisma.$queryRaw.mockResolvedValue([{ id: 'pi_1' }]);
+    prisma.paymentIntent.findUniqueOrThrow.mockResolvedValue({
+      status,
+      flags,
+    });
+  }
+
+  it('applies a valid transition under a row lock and writes the audit row', async () => {
+    const { service, prisma } = makeService();
+    lockReturns(prisma, 'CREATED');
+
+    const view = await service.transition('pi_1', { type: 'WATCH_STARTED' });
+
+    // the lock and the writes share one transaction
+    expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+    const sql = (prisma.$queryRaw.mock.calls[0][0] as string[]).join('?');
+    expect(sql).toContain('FOR UPDATE');
+    expect(prisma.paymentIntent.update).toHaveBeenCalledWith({
+      where: { id: 'pi_1' },
+      data: { status: 'PENDING', flags: [] },
+    });
+    expect(prisma.intentTransition.create).toHaveBeenCalledWith({
+      data: {
+        intentId: 'pi_1',
+        fromStatus: 'CREATED',
+        toStatus: 'PENDING',
+        event: 'WATCH_STARTED',
+      },
+    });
+    expect(view.status).toBe('PENDING');
+  });
+
+  it('rejects an invalid event with a 409 conflict and writes nothing', async () => {
+    const { service, prisma } = makeService();
+    lockReturns(prisma, 'FINALIZED');
+
+    await expect(
+      service.transition('pi_1', { type: 'WATCH_STARTED' }),
+    ).rejects.toMatchObject({ status: 409, code: 'conflict' });
+    expect(prisma.paymentIntent.update).not.toHaveBeenCalled();
+    expect(prisma.intentTransition.create).not.toHaveBeenCalled();
+  });
+
+  it('unions new flags with existing ones, never duplicating', async () => {
+    const { service, prisma } = makeService();
+    lockReturns(prisma, 'CONFIRMED', ['OVERPAID']);
+
+    await service.transition('pi_1', {
+      type: 'PAYMENT_FINALIZED',
+      overpaid: true,
+    });
+
+    expect(prisma.paymentIntent.update).toHaveBeenCalledWith({
+      where: { id: 'pi_1' },
+      data: { status: 'FINALIZED', flags: ['OVERPAID'] },
+    });
+  });
+
+  it('records a flag-only duplicate-payment event without changing status (FR-12)', async () => {
+    const { service, prisma } = makeService();
+    lockReturns(prisma, 'FINALIZED');
+
+    const view = await service.transition('pi_1', {
+      type: 'DUPLICATE_PAYMENT_DETECTED',
+    });
+
+    expect(prisma.paymentIntent.update).toHaveBeenCalledWith({
+      where: { id: 'pi_1' },
+      data: { status: 'FINALIZED', flags: ['DUPLICATE_PAYMENT'] },
+    });
+    expect(prisma.intentTransition.create).toHaveBeenCalledWith({
+      data: {
+        intentId: 'pi_1',
+        fromStatus: 'FINALIZED',
+        toStatus: 'FINALIZED',
+        event: 'DUPLICATE_PAYMENT_DETECTED',
+      },
+    });
+    expect(view.flags).toContain('DUPLICATE_PAYMENT');
+  });
+
+  it('404s an unknown intent without writing', async () => {
+    const { service, prisma } = makeService();
+    prisma.$queryRaw.mockResolvedValue([]);
+
+    await expect(
+      service.transition('pi_nope', { type: 'WATCH_STARTED' }),
+    ).rejects.toMatchObject({ status: 404, code: 'not_found' });
+    expect(prisma.paymentIntent.update).not.toHaveBeenCalled();
   });
 });
 

@@ -20,6 +20,11 @@ import { PaymentIntent, PaymentLink } from '../generated/prisma/client';
 import { effectiveLinkStatus } from '../links/link-status';
 import { PrismaService } from '../prisma/prisma.service';
 import { QuoteService } from '../rates/quote.service';
+import {
+  decideTransition,
+  IntentEvent,
+  TransitionConflictError,
+} from './state-machine';
 
 interface MintParams {
   merchantId: string;
@@ -32,9 +37,9 @@ interface MintParams {
 }
 
 /**
- * PaymentIntent lifecycle. This task covers creation (both doors: API and
- * link-open); `transition()` — the sole status writer (rule 2) — lands with
- * the week-2 state machine. Every read is merchantId-scoped (rule 4).
+ * PaymentIntent lifecycle: creation (both doors: API and link-open) and
+ * `transition()` — the sole status writer (rule 2). Every merchant-facing
+ * read is merchantId-scoped (rule 4).
  */
 @Injectable()
 export class PaymentIntentService {
@@ -130,6 +135,67 @@ export class PaymentIntentService {
     return this.toView(row);
   }
 
+  /**
+   * The only writer of intent status and flags (rule 2): pure decision
+   * (`decideTransition`) + transactional application under
+   * `SELECT ... FOR UPDATE`, with an IntentTransition audit row in the same
+   * transaction. Concurrent conflicting events serialize on the row lock;
+   * the loser re-reads a changed status, gets a TransitionConflictError, and
+   * nothing it did survives. Internal-only — controllers never call this;
+   * the watcher and expiry jobs do (not merchant-initiated, hence no
+   * merchantId). Outbox WebhookDelivery rows and the WS push join this
+   * transaction with their week-3 tasks (rule 3).
+   */
+  async transition(
+    intentId: string,
+    event: IntentEvent,
+  ): Promise<PaymentIntentView> {
+    return this.prisma.$transaction(async (tx) => {
+      // Raw SQL takes the lock only; data reads stay on the typed client
+      // (the pg adapter returns raw array columns as strings, not arrays).
+      const locked = await tx.$queryRaw<
+        { id: string }[]
+      >`SELECT id FROM "PaymentIntent" WHERE id = ${intentId} FOR UPDATE`;
+      if (locked.length === 0) {
+        throw new ProblemException(
+          404,
+          ERROR_CODES.NOT_FOUND,
+          'Payment intent not found',
+        );
+      }
+      const current = await tx.paymentIntent.findUniqueOrThrow({
+        where: { id: intentId },
+        select: { status: true, flags: true },
+      });
+
+      const decision = decideTransition(current.status, event);
+      if (!decision.ok) {
+        throw new TransitionConflictError(
+          current.status,
+          event.type,
+          decision.reason,
+        );
+      }
+
+      const row = await tx.paymentIntent.update({
+        where: { id: intentId },
+        data: {
+          status: decision.to,
+          flags: [...new Set([...current.flags, ...decision.addFlags])],
+        },
+      });
+      await tx.intentTransition.create({
+        data: {
+          intentId,
+          fromStatus: current.status,
+          toStatus: decision.to,
+          event: event.type,
+        },
+      });
+      return this.toView(row);
+    });
+  }
+
   private resolveLinkAmount(
     link: PaymentLink,
     input: OpenLinkIntentInput,
@@ -185,7 +251,7 @@ export class PaymentIntentService {
         data: {
           merchantId: params.merchantId,
           linkId: params.linkId,
-          reference: this.referenceGenerator.generate(),
+          reference: this.referenceGenerator.generateReference(),
           fiatCurrency: quote.fiatCurrency,
           amountFiat: quote.amountFiatMinor,
           token: quote.token,
