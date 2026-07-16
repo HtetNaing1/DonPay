@@ -17,6 +17,10 @@ export const ERROR_CODES = {
   SIGNATURE_INVALID: 'signature_invalid',
   /** Rate source is down and no cached rate is fresh enough to serve. */
   RATE_UNAVAILABLE: 'rate_unavailable',
+  /** Merchant has no verified default payout wallet — intents cannot be created. */
+  PAYOUT_WALLET_MISSING: 'payout_wallet_missing',
+  /** Link is paused, expired, or completed — it no longer accepts payments. */
+  LINK_NOT_PAYABLE: 'link_not_payable',
 } as const;
 
 export type ErrorCode = (typeof ERROR_CODES)[keyof typeof ERROR_CODES];

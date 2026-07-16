@@ -1,0 +1,240 @@
+import { Inject, Injectable } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import {
+  CreatePaymentIntentInput,
+  FiatCurrency,
+  OpenLinkIntentInput,
+  PaymentIntentView,
+  PayToken,
+} from '@donpay/shared';
+import {
+  REFERENCE_GENERATOR,
+  ReferenceGenerator,
+} from '../chain/reference-generator';
+import { Clock, CLOCK } from '../common/clock';
+import { IdempotencyService } from '../common/idempotency.service';
+import { ERROR_CODES } from '../common/problem/error-codes';
+import { ProblemException } from '../common/problem/problem.exception';
+import { Env } from '../config/env';
+import { PaymentIntent, PaymentLink } from '../generated/prisma/client';
+import { effectiveLinkStatus } from '../links/link-status';
+import { PrismaService } from '../prisma/prisma.service';
+import { QuoteService } from '../rates/quote.service';
+
+interface MintParams {
+  merchantId: string;
+  linkId: string | null;
+  fiatCurrency: FiatCurrency;
+  amountFiat: number;
+  token: PayToken;
+  note: string | null;
+  idempotencyKey?: string;
+}
+
+/**
+ * PaymentIntent lifecycle. This task covers creation (both doors: API and
+ * link-open); `transition()` — the sole status writer (rule 2) — lands with
+ * the week-2 state machine. Every read is merchantId-scoped (rule 4).
+ */
+@Injectable()
+export class PaymentIntentService {
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly quoteService: QuoteService,
+    private readonly idempotency: IdempotencyService,
+    @Inject(REFERENCE_GENERATOR)
+    private readonly referenceGenerator: ReferenceGenerator,
+    @Inject(CLOCK) private readonly clock: Clock,
+    private readonly config: ConfigService<Env, true>,
+  ) {}
+
+  /** `POST /v1/payment-intents` — same key + same merchant replays, never re-executes (rule 5). */
+  async createFromApi(
+    merchantId: string,
+    input: CreatePaymentIntentInput,
+    idempotencyKey?: string,
+  ): Promise<PaymentIntentView> {
+    if (idempotencyKey) {
+      const stored = await this.idempotency.find(merchantId, idempotencyKey);
+      if (stored) return stored as PaymentIntentView;
+    }
+    try {
+      return await this.mint({
+        merchantId,
+        linkId: null,
+        fiatCurrency: input.fiatCurrency,
+        amountFiat: input.amountFiat,
+        token: input.token,
+        note: input.note ?? null,
+        idempotencyKey,
+      });
+    } catch (error) {
+      // Lost a same-key race: our transaction rolled back, the winner's
+      // record is committed — replay it. Any other P2002 falls through.
+      if (idempotencyKey && this.idempotency.isConflict(error)) {
+        const stored = await this.idempotency.find(merchantId, idempotencyKey);
+        if (stored) return stored as PaymentIntentView;
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Public link-open flow (`/pay/[slug]`). Opening a link does NOT consume a
+   * use: useCount counts finalized payments (week-2 state machine), so an
+   * abandoned checkout can never exhaust a link — and FR-12 requires that
+   * concurrent payers of a one-time link each get an intent.
+   */
+  async openLink(
+    slug: string,
+    input: OpenLinkIntentInput,
+  ): Promise<PaymentIntentView> {
+    const link = await this.prisma.paymentLink.findUnique({ where: { slug } });
+    if (!link) {
+      throw new ProblemException(
+        404,
+        ERROR_CODES.NOT_FOUND,
+        'Payment link not found',
+      );
+    }
+    const status = effectiveLinkStatus(link, this.clock.now());
+    if (status !== 'ACTIVE') {
+      throw new ProblemException(
+        409,
+        ERROR_CODES.LINK_NOT_PAYABLE,
+        `This link is ${status.toLowerCase()} and no longer accepts payments`,
+      );
+    }
+    return this.mint({
+      merchantId: link.merchantId,
+      linkId: link.id,
+      fiatCurrency: link.fiatCurrency as FiatCurrency,
+      amountFiat: this.resolveLinkAmount(link, input),
+      token: link.token,
+      // snapshot: the payments list keeps its context even if the link is edited
+      note: link.note,
+    });
+  }
+
+  async get(merchantId: string, intentId: string): Promise<PaymentIntentView> {
+    const row = await this.prisma.paymentIntent.findFirst({
+      where: { id: intentId, merchantId },
+    });
+    if (!row) {
+      throw new ProblemException(
+        404,
+        ERROR_CODES.NOT_FOUND,
+        'Payment intent not found',
+      );
+    }
+    return this.toView(row);
+  }
+
+  private resolveLinkAmount(
+    link: PaymentLink,
+    input: OpenLinkIntentInput,
+  ): number {
+    if (link.amountMode === 'FIXED') {
+      if (input.amountFiat !== undefined) {
+        throw this.badAmount('This link has a fixed amount');
+      }
+      if (link.amountFiat === null) {
+        throw new Error(`FIXED link ${link.id} has no amountFiat`);
+      }
+      return link.amountFiat;
+    }
+    if (input.amountFiat === undefined) {
+      throw this.badAmount('amountFiat is required for this link');
+    }
+    if (link.minFiat !== null && input.amountFiat < link.minFiat) {
+      throw this.badAmount(`Amount is below the link minimum (${link.minFiat})`);
+    }
+    if (link.maxFiat !== null && input.amountFiat > link.maxFiat) {
+      throw this.badAmount(`Amount is above the link maximum (${link.maxFiat})`);
+    }
+    return input.amountFiat;
+  }
+
+  private async mint(params: MintParams): Promise<PaymentIntentView> {
+    // Fail fast before pricing: an intent is unpayable without a destination
+    const payoutWallet = await this.prisma.walletAddress.findFirst({
+      where: {
+        merchantId: params.merchantId,
+        isDefault: true,
+        verifiedAt: { not: null },
+      },
+    });
+    if (!payoutWallet) {
+      throw new ProblemException(
+        409,
+        ERROR_CODES.PAYOUT_WALLET_MISSING,
+        'Verify a payout wallet before accepting payments',
+      );
+    }
+
+    // Rate locks here, at intent creation — never at link creation (rule 6).
+    // Fetched before the transaction so no HTTP call runs inside it.
+    const quote = await this.quoteService.createQuote({
+      fiatCurrency: params.fiatCurrency,
+      amountFiatMinor: params.amountFiat,
+      token: params.token,
+    });
+
+    return this.prisma.$transaction(async (tx) => {
+      const row = await tx.paymentIntent.create({
+        data: {
+          merchantId: params.merchantId,
+          linkId: params.linkId,
+          reference: this.referenceGenerator.generate(),
+          fiatCurrency: quote.fiatCurrency,
+          amountFiat: quote.amountFiatMinor,
+          token: quote.token,
+          amountToken: quote.amountTokenMinor,
+          rateLocked: quote.rate,
+          rateSource: quote.rateSource,
+          quoteExpiresAt: quote.lockedUntil,
+          payoutAddress: payoutWallet.address,
+          note: params.note,
+          idempotencyKey: params.idempotencyKey ?? null,
+        },
+      });
+      const view = this.toView(row);
+      if (params.idempotencyKey) {
+        // Same transaction as the intent: they commit or roll back together
+        await this.idempotency.save(
+          tx,
+          params.merchantId,
+          params.idempotencyKey,
+          view,
+        );
+      }
+      return view;
+    });
+  }
+
+  private toView(row: PaymentIntent): PaymentIntentView {
+    return {
+      id: row.id,
+      linkId: row.linkId,
+      reference: row.reference,
+      // persisted as validated strings; the casts restore the unions
+      fiatCurrency: row.fiatCurrency as FiatCurrency,
+      amountFiat: row.amountFiat,
+      token: row.token,
+      amountToken: row.amountToken.toString(),
+      rate: row.rateLocked.toString(),
+      rateSource: row.rateSource,
+      quoteExpiresAt: row.quoteExpiresAt.toISOString(),
+      payoutAddress: row.payoutAddress,
+      status: row.status,
+      flags: row.flags as PaymentIntentView['flags'],
+      note: row.note,
+      checkoutUrl: `${this.config.get('WEB_BASE_URL', { infer: true })}/checkout/${row.id}`,
+      createdAt: row.createdAt.toISOString(),
+    };
+  }
+
+  private badAmount(detail: string): ProblemException {
+    return new ProblemException(400, ERROR_CODES.VALIDATION_FAILED, detail);
+  }
+}

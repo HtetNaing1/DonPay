@@ -25,7 +25,7 @@ Living checklist. One or two tasks per session, top to bottom. Check off in the 
 - [x] API keys: generate (`sk_` prefix, hashed, shown once), revoke, ApiKeyGuard with constant-time compare
 - [x] RateSource interface + CoinGecko implementation + cached quotes; QuoteService with 10-min lock
 - [x] PaymentLink CRUD (API + dashboard form with QR download); slug generation; status logic (paused/expired/completed)
-- [ ] PaymentIntent creation: from API (with Idempotency-Key) and from link-open; reference generation; quote embedding
+- [x] PaymentIntent creation: from API (with Idempotency-Key) and from link-open; reference generation; quote embedding
 
 ## Week 2 — Checkout, chain watcher, state machine
 
@@ -41,6 +41,7 @@ Living checklist. One or two tasks per session, top to bottom. Check off in the 
 
 ## Week 3 — Webhooks, dashboard, docs, ship
 
+- [ ] `/v1/payment-links` API-key surface: reuse LinksService + IdempotencyService (rule 5) behind ApiKeyGuard
 - [ ] Outbox: WebhookDelivery rows written in transition transaction; dispatcher worker with HMAC signing, 5 retries exponential backoff, dead-letter status
 - [ ] Webhook endpoint CRUD + delivery log UI + manual redeliver button
 - [ ] Dashboard: payments list (filter by status/link) + detail with state timeline and explorer links

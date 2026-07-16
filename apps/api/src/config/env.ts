@@ -31,6 +31,8 @@ export const envSchema = z.object({
   RATE_CACHE_TTL_SECONDS: z.coerce.number().int().positive().default(60),
   /** How long an intent's locked rate stays valid (PLAN.md FR-6: 10 minutes). */
   QUOTE_LOCK_SECONDS: z.coerce.number().int().positive().default(600),
+  /** Public origin of the web app — intents embed `${WEB_BASE_URL}/checkout/:id`. */
+  WEB_BASE_URL: z.url().default('http://localhost:3000'),
 });
 
 export type Env = z.infer<typeof envSchema>;
