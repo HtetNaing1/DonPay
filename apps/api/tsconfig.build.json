@@ -5,6 +5,7 @@
     "test",
     "dist",
     "**/*spec.ts",
+    "**/*.contract.ts",
     "vitest.config.ts",
     "prisma",
     "prisma.config.ts"

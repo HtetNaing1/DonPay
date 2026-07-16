@@ -30,7 +30,7 @@ Living checklist. One or two tasks per session, top to bottom. Check off in the 
 ## Week 2 — Checkout, chain watcher, state machine
 
 - [x] State machine: pure transition function with exhaustive unit tests (every state × every event), then transactional `transition()` with row locking + IntentTransition audit rows
-- [ ] ChainAdapter interface + adapter contract test suite (runs against any implementation)
+- [x] ChainAdapter interface + adapter contract test suite (runs against any implementation)
 - [ ] SolanaAdapter: build Solana Pay URL/QR, find-by-reference via Helius, verify recipient/mint/amount, commitment polling
 - [ ] Watcher: BullMQ repeating job per PENDING intent (3s poll, backoff on RPC errors, persisted — restart-safe); stop conditions; 24h low-frequency tail watch after expiry → LATE_PAYMENT
 - [ ] Under/overpayment handling per PLAN.md states; DUPLICATE_PAYMENT flag on completed one-time links
