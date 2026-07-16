@@ -24,8 +24,8 @@ import { LinksService } from './links.service';
 
 /**
  * Dashboard surface (session auth). The API-key surface (`/v1/payment-links`)
- * lands with the intents task, together with the Idempotency-Key handling
- * that rule 5 requires for API mutations — same LinksService underneath.
+ * is a separate TASKS.md item — same LinksService underneath, plus the
+ * IdempotencyService the intents task introduced (rule 5).
  */
 @Controller('merchants/me/links')
 @UseGuards(SessionGuard)

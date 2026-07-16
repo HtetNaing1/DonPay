@@ -141,6 +141,7 @@ model PaymentIntent {
   payoutAddress  String
   status         IntentStatus @default(CREATED)
   flags          String[] // OVERPAID, DUPLICATE_PAYMENT, ...
+  note           String? // API caller's memo, or the link note at open time
   idempotencyKey String?
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
