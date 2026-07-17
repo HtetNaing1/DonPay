@@ -1,19 +1,24 @@
 import { Module } from '@nestjs/common';
+import { CHAIN_ADAPTER } from './chain-adapter';
 import { REFERENCE_GENERATOR } from './reference-generator';
-import { SolanaReferenceGenerator } from './solana.reference-generator';
+import { HttpSolanaRpc, SOLANA_RPC } from './solana-rpc';
+import { SolanaAdapter } from './solana.adapter';
 
 /**
- * ChainAdapter implementations + ChainWatcherService. Services depend on the
- * CHAIN_ADAPTER token, never on a concrete adapter; new chains are new
- * adapters registered here (OCP) and must pass the contract suite in
- * chain-adapter.contract.ts (LSP). SolanaAdapter binds CHAIN_ADAPTER when it
- * lands; until then only the reference-generation slice is wired.
+ * ChainAdapter implementations + (soon) ChainWatcherService. Services depend
+ * on the CHAIN_ADAPTER token, never on a concrete adapter; new chains are
+ * new adapters registered here (OCP) and must pass the contract suite in
+ * chain-adapter.contract.ts (LSP). SolanaAdapter also serves the narrower
+ * REFERENCE_GENERATOR slice that intent creation depends on (ISP).
  */
 @Module({
   providers: [
-    SolanaReferenceGenerator,
-    { provide: REFERENCE_GENERATOR, useExisting: SolanaReferenceGenerator },
+    HttpSolanaRpc,
+    { provide: SOLANA_RPC, useExisting: HttpSolanaRpc },
+    SolanaAdapter,
+    { provide: CHAIN_ADAPTER, useExisting: SolanaAdapter },
+    { provide: REFERENCE_GENERATOR, useExisting: SolanaAdapter },
   ],
-  exports: [REFERENCE_GENERATOR],
+  exports: [CHAIN_ADAPTER, REFERENCE_GENERATOR],
 })
 export class ChainModule {}
