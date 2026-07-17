@@ -33,6 +33,10 @@ export const envSchema = z.object({
   QUOTE_LOCK_SECONDS: z.coerce.number().int().positive().default(600),
   /** Public origin of the web app — intents embed `${WEB_BASE_URL}/checkout/:id`. */
   WEB_BASE_URL: z.url().default('http://localhost:3000'),
+  /** Solana JSON-RPC endpoint (Helius devnet in deploys) — rule 10: cluster comes from env, never code. */
+  SOLANA_RPC_URL: z.url().default('https://api.devnet.solana.com'),
+  /** SPL mint accepted as USDC; default is Circle's devnet USDC. */
+  USDC_MINT: z.string().min(32).default('4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU'),
 });
 
 export type Env = z.infer<typeof envSchema>;
