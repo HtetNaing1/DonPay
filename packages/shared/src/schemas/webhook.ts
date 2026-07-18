@@ -32,6 +32,33 @@ export const createWebhookEndpointSchema = z.object({
 });
 export type CreateWebhookEndpointInput = z.infer<typeof createWebhookEndpointSchema>;
 
+/** An endpoint as listed in the dashboard — the secret is never in here. */
+export const webhookEndpointSchema = z.object({
+  id: z.string(),
+  url: z.string(),
+  events: z.array(webhookEventSchema),
+  active: z.boolean(),
+});
+export type WebhookEndpointView = z.infer<typeof webhookEndpointSchema>;
+
+/** Creation response: the one and only time the signing secret is shown. */
+export const createdWebhookEndpointSchema = webhookEndpointSchema.extend({
+  secret: z.string(),
+});
+export type CreatedWebhookEndpoint = z.infer<typeof createdWebhookEndpointSchema>;
+
+export const webhookDeliverySchema = z.object({
+  id: z.string(),
+  intentId: z.string(),
+  event: webhookEventSchema,
+  status: z.enum(['PENDING', 'DELIVERED', 'FAILED', 'DEAD']),
+  attempts: z.int().nonnegative(),
+  lastResponseCode: z.int().nullable(),
+  nextAttemptAt: z.iso.datetime().nullable(),
+  createdAt: z.iso.datetime(),
+});
+export type WebhookDeliveryView = z.infer<typeof webhookDeliverySchema>;
+
 export const updateWebhookEndpointSchema = z
   .object({
     url: z

@@ -43,7 +43,8 @@ Living checklist. One or two tasks per session, top to bottom. Check off in the 
 
 - [ ] `/v1/payment-links` API-key surface: reuse LinksService + IdempotencyService (rule 5) behind ApiKeyGuard
 - [x] Outbox: WebhookDelivery rows written in transition transaction; dispatcher worker with HMAC signing, 5 retries exponential backoff, dead-letter status
-- [ ] Webhook endpoint CRUD + delivery log UI + manual redeliver button
+- [x] Webhook endpoint CRUD API + delivery log + redeliver (secret shown once)
+- [ ] Webhooks dashboard UI: endpoints, delivery log table, redeliver button
 - [ ] Dashboard: payments list (filter by status/link) + detail with state timeline and explorer links
 - [ ] Dashboard: reconciliation view (DB vs chain per merchant, daily)
 - [ ] Devnet banner on every surface; landing page with the "why not just a wallet address" pitch
