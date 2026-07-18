@@ -8,10 +8,12 @@ import { ProblemFilter } from './common/problem/problem.filter';
 import { ConfigModule } from './config/config.module';
 import { Env } from './config/env';
 import { HealthController } from './health/health.controller';
+import { CheckoutGateway } from './intents/checkout.gateway';
 import { IntentsModule } from './intents/intents.module';
 import { LinksModule } from './links/links.module';
 import { MerchantsModule } from './merchants/merchants.module';
 import { PrismaModule } from './prisma/prisma.module';
+import { QueuesModule } from './queues/queues.module';
 import { RatesModule } from './rates/rates.module';
 import { WebhooksModule } from './webhooks/webhooks.module';
 
@@ -41,8 +43,13 @@ import { WebhooksModule } from './webhooks/webhooks.module';
     ChainModule,
     WebhooksModule,
     RatesModule,
+    QueuesModule, // CheckoutGateway subscribes to intent events
   ],
   controllers: [HealthController],
-  providers: [{ provide: APP_FILTER, useClass: ProblemFilter }],
+  providers: [
+    { provide: APP_FILTER, useClass: ProblemFilter },
+    // API process only — the worker publishes intent events, never serves sockets
+    CheckoutGateway,
+  ],
 })
 export class AppModule {}

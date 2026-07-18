@@ -1,12 +1,14 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
+  CheckoutIntent,
   CreatePaymentIntentInput,
   FiatCurrency,
   OpenLinkIntentInput,
   PaymentIntentView,
   PayToken,
 } from '@donpay/shared';
+import { CHAIN_ADAPTER, ChainAdapter } from '../chain/chain-adapter';
 import {
   REFERENCE_GENERATOR,
   ReferenceGenerator,
@@ -19,6 +21,7 @@ import { Env } from '../config/env';
 import { PaymentIntent, PaymentLink } from '../generated/prisma/client';
 import { effectiveLinkStatus } from '../links/link-status';
 import { PrismaService } from '../prisma/prisma.service';
+import { IntentEventsService } from '../queues/intent-events.service';
 import { WatchQueueService } from '../queues/watch-queue.service';
 import { QuoteService } from '../rates/quote.service';
 import {
@@ -53,6 +56,8 @@ export class PaymentIntentService {
     @Inject(CLOCK) private readonly clock: Clock,
     private readonly config: ConfigService<Env, true>,
     private readonly watchQueue: WatchQueueService,
+    @Inject(CHAIN_ADAPTER) private readonly chainAdapter: ChainAdapter,
+    private readonly intentEvents: IntentEventsService,
   ) {}
 
   /** `POST /v1/payment-intents` — same key + same merchant replays, never re-executes (rule 5). */
@@ -153,7 +158,7 @@ export class PaymentIntentService {
     intentId: string,
     event: IntentEvent,
   ): Promise<PaymentIntentView> {
-    return this.prisma.$transaction(async (tx) => {
+    const view = await this.prisma.$transaction(async (tx) => {
       // Raw SQL takes the lock only; data reads stay on the typed client
       // (the pg adapter returns raw array columns as strings, not arrays).
       const locked = await tx.$queryRaw<
@@ -211,6 +216,69 @@ export class PaymentIntentService {
       });
       return this.toView(row);
     });
+
+    // Post-commit fan-out to live checkout pages (WS gateway subscribes).
+    // Fire-and-forget: the page's fallback poll heals a missed push.
+    await this.intentEvents.publish({ intentId });
+    return view;
+  }
+
+  /**
+   * Everything the public checkout page renders, addressed by unguessable
+   * intent id — the one deliberately unscoped read (a customer is not a
+   * merchant). Exposes only what the payer already knows or needs: no
+   * merchant ids, keys, or other intents.
+   */
+  async getPublicCheckout(intentId: string): Promise<CheckoutIntent> {
+    const row = await this.prisma.paymentIntent.findUnique({
+      where: { id: intentId },
+      include: {
+        merchant: { select: { name: true } },
+        link: { select: { slug: true } },
+        transitions: { orderBy: { createdAt: 'asc' } },
+        payments: { orderBy: { slot: 'asc' } },
+      },
+    });
+    if (!row) {
+      throw new ProblemException(
+        404,
+        ERROR_CODES.NOT_FOUND,
+        'Payment intent not found',
+      );
+    }
+    return {
+      id: row.id,
+      status: row.status,
+      flags: row.flags as CheckoutIntent['flags'],
+      merchantName: row.merchant.name,
+      fiatCurrency: row.fiatCurrency as FiatCurrency,
+      amountFiat: row.amountFiat,
+      token: row.token,
+      amountToken: row.amountToken.toString(),
+      // label/message show up in the payer's wallet UI
+      paymentUrl: this.chainAdapter.buildPaymentUrl({
+        payoutAddress: row.payoutAddress,
+        token: row.token,
+        amountTokenMinor: row.amountToken,
+        reference: row.reference,
+        label: row.merchant.name,
+        message: row.note ?? undefined,
+      }),
+      payoutAddress: row.payoutAddress,
+      reference: row.reference,
+      note: row.note,
+      linkSlug: row.link?.slug ?? null,
+      quoteExpiresAt: row.quoteExpiresAt.toISOString(),
+      createdAt: row.createdAt.toISOString(),
+      transitions: row.transitions.map((t) => ({
+        status: t.toStatus,
+        at: t.createdAt.toISOString(),
+      })),
+      payments: row.payments.map((p) => ({
+        txSignature: p.txSignature,
+        amountToken: p.amountToken.toString(),
+      })),
+    };
   }
 
   private resolveLinkAmount(
@@ -319,6 +387,12 @@ export class PaymentIntentService {
       flags: row.flags as PaymentIntentView['flags'],
       note: row.note,
       checkoutUrl: `${this.config.get('WEB_BASE_URL', { infer: true })}/checkout/${row.id}`,
+      paymentUrl: this.chainAdapter.buildPaymentUrl({
+        payoutAddress: row.payoutAddress,
+        token: row.token,
+        amountTokenMinor: row.amountToken,
+        reference: row.reference,
+      }),
       createdAt: row.createdAt.toISOString(),
     };
   }
