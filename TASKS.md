@@ -36,8 +36,8 @@ Living checklist. One or two tasks per session, top to bottom. Check off in the 
 - [x] Under/overpayment handling per PLAN.md states; DUPLICATE_PAYMENT flag on completed one-time links
 - [x] Hosted checkout page: server-rendered intent data, QR + wallet deep link, expiry countdown, live status via WS gateway
 - [x] `/pay/[slug]`: link → (amount input if PAYER_CHOOSES) → intent → redirect to checkout
-- [ ] **Concurrency test:** N parallel workers hammer one intent with conflicting events → exactly one winning transition path, zero double-writes
-- [ ] **One-time link race test:** two simultaneous payments → first finalized wins, second flagged DUPLICATE_PAYMENT
+- [x] **Concurrency test:** N parallel workers hammer one intent with conflicting events → exactly one winning transition path, zero double-writes
+- [x] **One-time link race test:** two simultaneous payments → first finalized wins, second flagged DUPLICATE_PAYMENT
 
 ## Week 3 — Webhooks, dashboard, docs, ship
 

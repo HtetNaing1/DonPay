@@ -4,6 +4,8 @@ import request from 'supertest';
 import { afterEach, beforeEach, describe, it } from 'vitest';
 import { AppModule } from './../src/app.module';
 import { PrismaService } from './../src/prisma/prisma.service';
+import { IntentEventsService } from './../src/queues/intent-events.service';
+import { WATCH_QUEUE } from './../src/queues/watch-queue.service';
 
 // Boot-time env for hermetic runs (no real database is touched)
 process.env['DATABASE_URL'] ??= 'postgresql://test:test@localhost:5432/test';
@@ -19,6 +21,15 @@ describe('App (e2e)', () => {
     })
       .overrideProvider(PrismaService)
       .useValue({})
+      // keep the boot hermetic: no Redis either (queue + pub/sub fan-out)
+      .overrideProvider(WATCH_QUEUE)
+      .useValue({ add: async () => undefined, close: async () => undefined })
+      .overrideProvider(IntentEventsService)
+      .useValue({
+        publish: async () => undefined,
+        subscribe: () => undefined,
+        onApplicationShutdown: async () => undefined,
+      })
       .compile();
 
     app = moduleFixture.createNestApplication();
