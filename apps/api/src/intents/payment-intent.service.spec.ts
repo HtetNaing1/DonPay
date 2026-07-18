@@ -11,6 +11,8 @@ import {
   WalletAddress,
 } from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { FakeChainAdapter } from '../chain/testing/fake-chain.adapter';
+import { IntentEventsService } from '../queues/intent-events.service';
 import { WatchQueueService } from '../queues/watch-queue.service';
 import { Quote, QuoteService } from '../rates/quote.service';
 import { PaymentIntentService } from './payment-intent.service';
@@ -132,6 +134,7 @@ function makeService() {
     get: vi.fn(() => 'https://pay.test'),
   };
   const watchQueue = { startWatch: vi.fn().mockResolvedValue(undefined) };
+  const intentEvents = { publish: vi.fn().mockResolvedValue(undefined) };
   const service = new PaymentIntentService(
     prisma as unknown as PrismaService,
     quoteService as unknown as QuoteService,
@@ -140,8 +143,17 @@ function makeService() {
     clock,
     config as unknown as ConfigService<Env, true>,
     watchQueue as unknown as WatchQueueService,
+    new FakeChainAdapter(),
+    intentEvents as unknown as IntentEventsService,
   );
-  return { service, prisma, quoteService, referenceGenerator, watchQueue };
+  return {
+    service,
+    prisma,
+    quoteService,
+    referenceGenerator,
+    watchQueue,
+    intentEvents,
+  };
 }
 
 function uniqueViolation(): Prisma.PrismaClientKnownRequestError {
@@ -196,6 +208,13 @@ describe('PaymentIntentService.createFromApi', () => {
     const { service, watchQueue } = makeService();
     await service.createFromApi(MERCHANT_ID, API_INPUT);
     expect(watchQueue.startWatch).toHaveBeenCalledWith('pi_1');
+  });
+
+  it('embeds the chain payment URL in the view', async () => {
+    const { service } = makeService();
+    const view = await service.createFromApi(MERCHANT_ID, API_INPUT);
+    expect(view.paymentUrl).toContain(PAYOUT_ADDRESS);
+    expect(view.paymentUrl).toContain(`reference=${REFERENCE}`);
   });
 
   it('409s payout_wallet_missing before pricing when no verified default wallet exists', async () => {
@@ -400,6 +419,20 @@ describe('PaymentIntentService.transition', () => {
       },
     });
     expect(view.status).toBe('PENDING');
+  });
+
+  it('publishes an intent event after the transition commits — and only then', async () => {
+    const { service, prisma, intentEvents } = makeService();
+    lockReturns(prisma, 'CREATED');
+    await service.transition('pi_1', { type: 'WATCH_STARTED' });
+    expect(intentEvents.publish).toHaveBeenCalledWith({ intentId: 'pi_1' });
+
+    intentEvents.publish.mockClear();
+    lockReturns(prisma, 'FINALIZED');
+    await expect(
+      service.transition('pi_1', { type: 'WATCH_STARTED' }),
+    ).rejects.toMatchObject({ status: 409 });
+    expect(intentEvents.publish).not.toHaveBeenCalled();
   });
 
   it('rejects an invalid event with a 409 conflict and writes nothing', async () => {

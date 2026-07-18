@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { Queue } from 'bullmq';
 import IORedis from 'ioredis';
 import { Env } from '../config/env';
+import { IntentEventsService } from './intent-events.service';
 import { WATCH_QUEUE_NAME, WatchJobData } from './watch-job';
 import { WATCH_QUEUE, WatchQueueService } from './watch-queue.service';
 
@@ -29,8 +30,9 @@ export function createRedisConnection(
         }),
     },
     WatchQueueService,
+    IntentEventsService,
   ],
-  exports: [WatchQueueService],
+  exports: [WatchQueueService, IntentEventsService],
 })
 export class QueuesModule implements OnApplicationShutdown {
   constructor(

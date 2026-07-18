@@ -1,5 +1,6 @@
-import { Body, Controller, HttpCode, Param, Post } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Param, Post } from '@nestjs/common';
 import {
+  CheckoutIntent,
   OpenLinkIntentInput,
   openLinkIntentSchema,
   PaymentIntentView,
@@ -25,5 +26,11 @@ export class CheckoutController {
     body: OpenLinkIntentInput,
   ): Promise<PaymentIntentView> {
     return this.intentService.openLink(slug, body);
+  }
+
+  /** Everything `/checkout/[intentId]` server-renders; the WS gateway pushes the same shape. */
+  @Get('intents/:id')
+  checkout(@Param('id') intentId: string): Promise<CheckoutIntent> {
+    return this.intentService.getPublicCheckout(intentId);
   }
 }
