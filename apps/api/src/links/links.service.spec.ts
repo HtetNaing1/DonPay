@@ -15,6 +15,7 @@ function makeService() {
       create: vi.fn(),
       findMany: vi.fn().mockResolvedValue([]),
       findFirst: vi.fn(),
+      findUnique: vi.fn(),
       update: vi.fn(),
       delete: vi.fn(),
     },
@@ -245,6 +246,46 @@ describe('LinksService.remove', () => {
       code: 'not_found',
     });
     expect(prisma.paymentLink.delete).not.toHaveBeenCalled();
+  });
+});
+
+describe('LinksService.getPublicBySlug', () => {
+  it('returns only payable terms, with merchant name and effective status', async () => {
+    const { service, prisma } = makeService();
+    prisma.paymentLink.findUnique.mockResolvedValue({
+      ...linkRow({ expiresAt: new Date(NOW.getTime() - 1000) }),
+      merchant: { name: 'Kyoto Atelier' },
+    });
+
+    const view = await service.getPublicBySlug('slug_abc123');
+
+    expect(prisma.paymentLink.findUnique).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { slug: 'slug_abc123' } }),
+    );
+    expect(view).toEqual({
+      slug: 'slug_abc123',
+      merchantName: 'Kyoto Atelier',
+      amountMode: 'FIXED',
+      fiatCurrency: 'USD',
+      amountFiat: 2500,
+      minFiat: null,
+      maxFiat: null,
+      token: 'USDC',
+      note: null,
+      status: 'EXPIRED', // effective, not stored
+    });
+    // nothing merchant-internal leaks
+    expect(view).not.toHaveProperty('merchantId');
+    expect(view).not.toHaveProperty('useCount');
+  });
+
+  it('404s an unknown slug', async () => {
+    const { service, prisma } = makeService();
+    prisma.paymentLink.findUnique.mockResolvedValue(null);
+    await expect(service.getPublicBySlug('nope')).rejects.toMatchObject({
+      status: 404,
+      code: 'not_found',
+    });
   });
 });
 

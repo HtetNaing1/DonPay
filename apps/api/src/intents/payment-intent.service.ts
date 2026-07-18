@@ -4,6 +4,7 @@ import {
   CheckoutIntent,
   CreatePaymentIntentInput,
   FiatCurrency,
+  fiatMinorToMajor,
   OpenLinkIntentInput,
   PaymentIntentView,
   PayToken,
@@ -297,11 +298,17 @@ export class PaymentIntentService {
     if (input.amountFiat === undefined) {
       throw this.badAmount('amountFiat is required for this link');
     }
+    // details are payer-facing (the checkout form shows them) — major units
+    const currency = link.fiatCurrency as FiatCurrency;
     if (link.minFiat !== null && input.amountFiat < link.minFiat) {
-      throw this.badAmount(`Amount is below the link minimum (${link.minFiat})`);
+      throw this.badAmount(
+        `The minimum for this link is ${fiatMinorToMajor(link.minFiat, currency)} ${currency}`,
+      );
     }
     if (link.maxFiat !== null && input.amountFiat > link.maxFiat) {
-      throw this.badAmount(`Amount is above the link maximum (${link.maxFiat})`);
+      throw this.badAmount(
+        `The maximum for this link is ${fiatMinorToMajor(link.maxFiat, currency)} ${currency}`,
+      );
     }
     return input.amountFiat;
   }

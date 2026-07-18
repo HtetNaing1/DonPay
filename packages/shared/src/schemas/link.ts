@@ -103,6 +103,26 @@ export const paymentLinkSchema = z.object({
 export type PaymentLinkView = z.infer<typeof paymentLinkSchema>;
 
 /**
+ * What the public `/pay/[slug]` page renders before an intent exists —
+ * only the link's payable terms, nothing merchant-internal (no ids, no
+ * usage counters). `status` is the effective status, so the page can say
+ * why a link no longer accepts payments.
+ */
+export const publicLinkSchema = z.object({
+  slug: z.string(),
+  merchantName: z.string(),
+  amountMode: amountModeSchema,
+  fiatCurrency: fiatCurrencySchema,
+  amountFiat: fiatMinorAmountSchema.nullable(),
+  minFiat: fiatMinorAmountSchema.nullable(),
+  maxFiat: fiatMinorAmountSchema.nullable(),
+  token: payTokenSchema,
+  note: z.string().nullable(),
+  status: linkStatusSchema,
+});
+export type PublicLink = z.infer<typeof publicLinkSchema>;
+
+/**
  * Dashboard link form: amounts arrive as major-unit strings ("25.00") and
  * empty inputs as "". Validates/converts, then pipes into
  * createPaymentLinkSchema so form and API enforce identical rules.
