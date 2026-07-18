@@ -19,6 +19,7 @@ import { Env } from '../config/env';
 import { PaymentIntent, PaymentLink } from '../generated/prisma/client';
 import { effectiveLinkStatus } from '../links/link-status';
 import { PrismaService } from '../prisma/prisma.service';
+import { WatchQueueService } from '../queues/watch-queue.service';
 import { QuoteService } from '../rates/quote.service';
 import {
   decideTransition,
@@ -51,6 +52,7 @@ export class PaymentIntentService {
     private readonly referenceGenerator: ReferenceGenerator,
     @Inject(CLOCK) private readonly clock: Clock,
     private readonly config: ConfigService<Env, true>,
+    private readonly watchQueue: WatchQueueService,
   ) {}
 
   /** `POST /v1/payment-intents` — same key + same merchant replays, never re-executes (rule 5). */
@@ -246,7 +248,7 @@ export class PaymentIntentService {
       token: params.token,
     });
 
-    return this.prisma.$transaction(async (tx) => {
+    const view = await this.prisma.$transaction(async (tx) => {
       const row = await tx.paymentIntent.create({
         data: {
           merchantId: params.merchantId,
@@ -264,18 +266,24 @@ export class PaymentIntentService {
           idempotencyKey: params.idempotencyKey ?? null,
         },
       });
-      const view = this.toView(row);
+      const created = this.toView(row);
       if (params.idempotencyKey) {
         // Same transaction as the intent: they commit or roll back together
         await this.idempotency.save(
           tx,
           params.merchantId,
           params.idempotencyKey,
-          view,
+          created,
         );
       }
-      return view;
+      return created;
     });
+
+    // Watch starts only after the intent is committed; the first tick applies
+    // WATCH_STARTED. If Redis is down we fail loudly — an unwatched intent
+    // would accept a payment nobody detects.
+    await this.watchQueue.startWatch(view.id);
+    return view;
   }
 
   private toView(row: PaymentIntent): PaymentIntentView {
