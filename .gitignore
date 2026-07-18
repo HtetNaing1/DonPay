@@ -22,3 +22,6 @@ pnpm-debug.log*
 coverage/
 .turbo/
 .vercel/
+
+# personal learning/reference material (not part of the codebase)
+DonPay-Backend-Guide.pdf
