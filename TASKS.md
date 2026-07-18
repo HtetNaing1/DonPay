@@ -42,7 +42,7 @@ Living checklist. One or two tasks per session, top to bottom. Check off in the 
 ## Week 3 — Webhooks, dashboard, docs, ship
 
 - [ ] `/v1/payment-links` API-key surface: reuse LinksService + IdempotencyService (rule 5) behind ApiKeyGuard
-- [ ] Outbox: WebhookDelivery rows written in transition transaction; dispatcher worker with HMAC signing, 5 retries exponential backoff, dead-letter status
+- [x] Outbox: WebhookDelivery rows written in transition transaction; dispatcher worker with HMAC signing, 5 retries exponential backoff, dead-letter status
 - [ ] Webhook endpoint CRUD + delivery log UI + manual redeliver button
 - [ ] Dashboard: payments list (filter by status/link) + detail with state timeline and explorer links
 - [ ] Dashboard: reconciliation view (DB vs chain per merchant, daily)
