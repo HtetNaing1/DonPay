@@ -88,9 +88,10 @@ export class PaymentIntentService {
 
   /**
    * Public link-open flow (`/pay/[slug]`). Opening a link does NOT consume a
-   * use: useCount counts finalized payments (week-2 state machine), so an
-   * abandoned checkout can never exhaust a link — and FR-12 requires that
-   * concurrent payers of a one-time link each get an intent.
+   * use: useCount counts finalized payments (incremented by transition() on
+   * PAYMENT_FINALIZED), so an abandoned checkout can never exhaust a link —
+   * and FR-12 requires that concurrent payers of a one-time link each get an
+   * intent.
    */
   async openLink(
     slug: string,
@@ -167,7 +168,7 @@ export class PaymentIntentService {
       }
       const current = await tx.paymentIntent.findUniqueOrThrow({
         where: { id: intentId },
-        select: { status: true, flags: true },
+        select: { status: true, flags: true, linkId: true },
       });
 
       const decision = decideTransition(current.status, event);
@@ -179,12 +180,26 @@ export class PaymentIntentService {
         );
       }
 
+      const flags = new Set([...current.flags, ...decision.addFlags]);
+      if (event.type === 'PAYMENT_FINALIZED' && current.linkId !== null) {
+        // Finalization consumes a link use, in the same transaction as the
+        // status write — this is what completes one-time links (their
+        // effective status derives from useCount). The atomic increment
+        // decides the FR-12 race: whichever intent pushes useCount past
+        // maxUses lost, and its payment is flagged — funds still moved
+        // on-chain, so it finalizes; it is surfaced, never swallowed.
+        const link = await tx.paymentLink.update({
+          where: { id: current.linkId },
+          data: { useCount: { increment: 1 } },
+        });
+        if (link.maxUses !== null && link.useCount > link.maxUses) {
+          flags.add('DUPLICATE_PAYMENT');
+        }
+      }
+
       const row = await tx.paymentIntent.update({
         where: { id: intentId },
-        data: {
-          status: decision.to,
-          flags: [...new Set([...current.flags, ...decision.addFlags])],
-        },
+        data: { status: decision.to, flags: [...flags] },
       });
       await tx.intentTransition.create({
         data: {

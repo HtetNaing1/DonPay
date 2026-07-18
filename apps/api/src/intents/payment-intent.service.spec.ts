@@ -367,11 +367,13 @@ describe('PaymentIntentService.transition', () => {
     prisma: ReturnType<typeof makeService>['prisma'],
     status: string,
     flags: string[] = [],
+    linkId: string | null = null,
   ) {
     prisma.$queryRaw.mockResolvedValue([{ id: 'pi_1' }]);
     prisma.paymentIntent.findUniqueOrThrow.mockResolvedValue({
       status,
       flags,
+      linkId,
     });
   }
 
@@ -457,6 +459,64 @@ describe('PaymentIntentService.transition', () => {
       service.transition('pi_nope', { type: 'WATCH_STARTED' }),
     ).rejects.toMatchObject({ status: 404, code: 'not_found' });
     expect(prisma.paymentIntent.update).not.toHaveBeenCalled();
+  });
+
+  it('finalizing a link intent consumes a use in the same transaction', async () => {
+    const { service, prisma } = makeService();
+    lockReturns(prisma, 'CONFIRMED', [], 'l_1');
+    prisma.paymentLink.update.mockResolvedValue({ useCount: 1, maxUses: 1 });
+
+    await service.transition('pi_1', {
+      type: 'PAYMENT_FINALIZED',
+      overpaid: false,
+    });
+
+    expect(prisma.paymentLink.update).toHaveBeenCalledWith({
+      where: { id: 'l_1' },
+      data: { useCount: { increment: 1 } },
+    });
+    // first payment within maxUses — finalized clean
+    expect(prisma.paymentIntent.update).toHaveBeenCalledWith({
+      where: { id: 'pi_1' },
+      data: { status: 'FINALIZED', flags: [] },
+    });
+  });
+
+  it('finalizing past an exhausted one-time link flags DUPLICATE_PAYMENT (FR-12 race loser)', async () => {
+    const { service, prisma } = makeService();
+    lockReturns(prisma, 'CONFIRMED', [], 'l_1');
+    prisma.paymentLink.update.mockResolvedValue({ useCount: 2, maxUses: 1 });
+
+    await service.transition('pi_1', {
+      type: 'PAYMENT_FINALIZED',
+      overpaid: false,
+    });
+
+    expect(prisma.paymentIntent.update).toHaveBeenCalledWith({
+      where: { id: 'pi_1' },
+      data: { status: 'FINALIZED', flags: ['DUPLICATE_PAYMENT'] },
+    });
+  });
+
+  it('finalizing an API intent (no link) touches no link rows', async () => {
+    const { service, prisma } = makeService();
+    lockReturns(prisma, 'CONFIRMED');
+
+    await service.transition('pi_1', {
+      type: 'PAYMENT_FINALIZED',
+      overpaid: false,
+    });
+
+    expect(prisma.paymentLink.update).not.toHaveBeenCalled();
+  });
+
+  it('non-finalizing transitions never touch the link', async () => {
+    const { service, prisma } = makeService();
+    lockReturns(prisma, 'PENDING', [], 'l_1');
+
+    await service.transition('pi_1', { type: 'PAYMENT_DETECTED' });
+
+    expect(prisma.paymentLink.update).not.toHaveBeenCalled();
   });
 });
 
