@@ -154,7 +154,7 @@ export class ChainWatcherService {
           where: { id: payment.id },
           data: { finalizedAt: this.clock.now() },
         });
-        return null; // done (duplicate-payment tail on finalized intents: next task)
+        return this.tail(); // paid — now tail-watch for duplicate payments (FR-12)
       }
 
       case 'EXPIRED': {
@@ -166,14 +166,35 @@ export class ChainWatcherService {
           });
           return null; // terminal — flagged for merchant action, never dropped
         }
-        const tailEndsAt = intent.quoteExpiresAt.getTime() + this.tailMs;
-        if (this.clock.now().getTime() >= tailEndsAt) {
-          return null; // 24h tail watch is over
+        if (this.tailOver(intent)) return null; // 24h tail watch is over
+        return this.tail();
+      }
+
+      case 'FINALIZED': {
+        // A second payment on an already-paid intent (double scan / wallet
+        // retry) is real money on-chain — record and flag it, never drop it.
+        if (this.tailOver(intent)) return null;
+        const payments = await this.findPayments(intent);
+        const known = await this.prisma.onchainPayment.findMany({
+          where: { intentId: intent.id },
+          select: { txSignature: true },
+        });
+        const knownSignatures = new Set(known.map((k) => k.txSignature));
+        const fresh = payments.filter(
+          (p) => !knownSignatures.has(p.txSignature),
+        );
+        if (fresh.length > 0) {
+          for (const payment of fresh) {
+            await this.recordPayment(intent.id, payment);
+          }
+          await this.intents.transition(intent.id, {
+            type: 'DUPLICATE_PAYMENT_DETECTED',
+          });
         }
         return this.tail();
       }
 
-      // FINALIZED / UNDERPAID / LATE_PAYMENT — nothing left to watch
+      // UNDERPAID / LATE_PAYMENT — nothing left to watch
       default:
         return null;
     }
@@ -212,6 +233,13 @@ export class ChainWatcherService {
       where: { intentId },
       orderBy: { slot: 'asc' }, // chain order: the first payment is THE payment (FR-12)
     });
+  }
+
+  /** Both post-settlement tails (late payment, duplicates) share the 24h window. */
+  private tailOver(intent: PaymentIntent): boolean {
+    return (
+      this.clock.now().getTime() >= intent.quoteExpiresAt.getTime() + this.tailMs
+    );
   }
 
   private cadence(mode: WatchJobData['mode']): number {

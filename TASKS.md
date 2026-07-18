@@ -33,7 +33,7 @@ Living checklist. One or two tasks per session, top to bottom. Check off in the 
 - [x] ChainAdapter interface + adapter contract test suite (runs against any implementation)
 - [x] SolanaAdapter: build Solana Pay URL/QR, find-by-reference via Helius, verify recipient/mint/amount, commitment polling
 - [x] Watcher: BullMQ repeating job per PENDING intent (3s poll, backoff on RPC errors, persisted — restart-safe); stop conditions; 24h low-frequency tail watch after expiry → LATE_PAYMENT
-- [ ] Under/overpayment handling per PLAN.md states; DUPLICATE_PAYMENT flag on completed one-time links
+- [x] Under/overpayment handling per PLAN.md states; DUPLICATE_PAYMENT flag on completed one-time links
 - [ ] Hosted checkout page: server-rendered intent data, QR + wallet deep link, expiry countdown, live status via WS gateway
 - [ ] `/pay/[slug]`: link → (amount input if PAYER_CHOOSES) → intent → redirect to checkout
 - [ ] **Concurrency test:** N parallel workers hammer one intent with conflicting events → exactly one winning transition path, zero double-writes

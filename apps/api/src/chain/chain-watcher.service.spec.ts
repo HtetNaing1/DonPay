@@ -53,6 +53,7 @@ function makeWatcher(intent: PaymentIntent | null, now: Date = NOW) {
     onchainPayment: {
       upsert: vi.fn().mockResolvedValue(undefined),
       findFirst: vi.fn().mockResolvedValue(null),
+      findMany: vi.fn().mockResolvedValue([]),
       update: vi.fn().mockResolvedValue(undefined),
     },
   };
@@ -207,7 +208,7 @@ describe('ChainWatcherService.tick — active watch', () => {
     });
   });
 
-  it('CONFIRMED once finalized: PAYMENT_FINALIZED with the overpaid flag, stamps finalizedAt, stops', async () => {
+  it('CONFIRMED once finalized: PAYMENT_FINALIZED with the overpaid flag, stamps finalizedAt, tails for duplicates', async () => {
     const { watcher, adapter, prisma, intents, watchQueue } = makeWatcher(
       intentRow({ status: 'CONFIRMED' }),
     );
@@ -229,7 +230,10 @@ describe('ChainWatcherService.tick — active watch', () => {
       where: { id: 'op_1' },
       data: { finalizedAt: NOW },
     });
-    expect(watchQueue.schedule).not.toHaveBeenCalled();
+    expect(watchQueue.schedule).toHaveBeenCalledWith(
+      expect.objectContaining({ mode: 'tail' }),
+      600_000,
+    );
   });
 });
 
@@ -279,7 +283,7 @@ describe('ChainWatcherService.tick — tail watch and stop conditions', () => {
   });
 
   it('terminal statuses stop immediately', async () => {
-    for (const status of ['FINALIZED', 'UNDERPAID', 'LATE_PAYMENT'] as const) {
+    for (const status of ['UNDERPAID', 'LATE_PAYMENT'] as const) {
       const { watcher, intents, watchQueue } = makeWatcher(
         intentRow({ status }),
       );
@@ -287,6 +291,53 @@ describe('ChainWatcherService.tick — tail watch and stop conditions', () => {
       expect(intents.transition).not.toHaveBeenCalled();
       expect(watchQueue.schedule).not.toHaveBeenCalled();
     }
+  });
+
+  it('FINALIZED with only the known payment: quiet duplicate tail, no transition', async () => {
+    const { watcher, adapter, prisma, intents, watchQueue } = makeWatcher(
+      intentRow({ status: 'FINALIZED' }),
+    );
+    const signature = pay(adapter, 25_000_000n);
+    prisma.onchainPayment.findMany.mockResolvedValue([
+      { txSignature: signature },
+    ]);
+
+    await watcher.tick({ ...TICK, mode: 'tail' });
+
+    expect(intents.transition).not.toHaveBeenCalled();
+    expect(watchQueue.schedule).toHaveBeenCalledWith(
+      expect.objectContaining({ mode: 'tail' }),
+      600_000,
+    );
+  });
+
+  it('FINALIZED with a second, unknown payment: records it and flags DUPLICATE_PAYMENT (FR-12)', async () => {
+    const { watcher, adapter, prisma, intents } = makeWatcher(
+      intentRow({ status: 'FINALIZED' }),
+    );
+    const first = pay(adapter, 25_000_000n);
+    const second = pay(adapter, 25_000_000n); // double scan
+    prisma.onchainPayment.findMany.mockResolvedValue([{ txSignature: first }]);
+
+    await watcher.tick({ ...TICK, mode: 'tail' });
+
+    expect(prisma.onchainPayment.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { txSignature: second } }),
+    );
+    expect(intents.transition).toHaveBeenCalledWith('pi_w1', {
+      type: 'DUPLICATE_PAYMENT_DETECTED',
+    });
+  });
+
+  it('FINALIZED past the 24h tail window: the duplicate watch ends', async () => {
+    const { watcher, watchQueue } = makeWatcher(
+      intentRow({
+        status: 'FINALIZED',
+        quoteExpiresAt: new Date(NOW.getTime() - 25 * 3_600_000),
+      }),
+    );
+    await watcher.tick({ ...TICK, mode: 'tail' });
+    expect(watchQueue.schedule).not.toHaveBeenCalled();
   });
 
   it('a vanished intent (rolled-back creation) stops without scheduling', async () => {
