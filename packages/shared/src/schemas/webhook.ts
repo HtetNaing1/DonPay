@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
-/** One event per intent state a merchant can subscribe to (fired on transition into it). */
+/** One event per intent state a merchant can subscribe to (fired on transition
+ *  into it), plus the flag-only duplicate-payment notice on finalized intents. */
 export const WEBHOOK_EVENTS = [
   'intent.pending',
   'intent.detected',
@@ -9,6 +10,7 @@ export const WEBHOOK_EVENTS = [
   'intent.expired',
   'intent.underpaid',
   'intent.late_payment',
+  'intent.duplicate_payment',
 ] as const;
 export const webhookEventSchema = z.enum(WEBHOOK_EVENTS);
 export type WebhookEvent = z.infer<typeof webhookEventSchema>;

@@ -6,6 +6,7 @@ import { IdempotencyService } from '../common/idempotency.service';
 import { LinksModule } from '../links/links.module';
 import { QueuesModule } from '../queues/queues.module';
 import { RatesModule } from '../rates/rates.module';
+import { WebhooksModule } from '../webhooks/webhooks.module';
 import { CheckoutController } from './checkout.controller';
 import { IntentsController } from './intents.controller';
 import { PaymentIntentService } from './payment-intent.service';
@@ -15,7 +16,14 @@ import { PaymentIntentService } from './payment-intent.service';
  * PaymentIntentService.transition() — the state machine is the only writer.
  */
 @Module({
-  imports: [AuthModule, ChainModule, RatesModule, QueuesModule, LinksModule],
+  imports: [
+    AuthModule,
+    ChainModule,
+    RatesModule,
+    QueuesModule,
+    LinksModule,
+    WebhooksModule,
+  ],
   controllers: [IntentsController, CheckoutController],
   providers: [
     PaymentIntentService,

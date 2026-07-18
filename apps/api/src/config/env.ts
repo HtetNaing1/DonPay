@@ -46,6 +46,11 @@ export const envSchema = z.object({
   WATCH_TAIL_HOURS: z.coerce.number().int().positive().default(24),
   /** Backoff ceiling when the RPC is erroring. */
   WATCH_MAX_BACKOFF_MS: z.coerce.number().int().positive().default(60_000),
+  /** Outbox dispatcher: sweep cadence, per-request timeout, retry policy (rule 3: 5 attempts → dead-letter). */
+  WEBHOOK_POLL_MS: z.coerce.number().int().positive().default(2_000),
+  WEBHOOK_TIMEOUT_MS: z.coerce.number().int().positive().default(10_000),
+  WEBHOOK_MAX_ATTEMPTS: z.coerce.number().int().positive().default(5),
+  WEBHOOK_BACKOFF_BASE_MS: z.coerce.number().int().positive().default(30_000),
 });
 
 export type Env = z.infer<typeof envSchema>;

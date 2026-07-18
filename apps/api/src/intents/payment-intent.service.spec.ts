@@ -15,6 +15,7 @@ import { FakeChainAdapter } from '../chain/testing/fake-chain.adapter';
 import { IntentEventsService } from '../queues/intent-events.service';
 import { WatchQueueService } from '../queues/watch-queue.service';
 import { Quote, QuoteService } from '../rates/quote.service';
+import { WebhookOutboxService } from '../webhooks/webhook-outbox.service';
 import { PaymentIntentService } from './payment-intent.service';
 
 const NOW = new Date('2026-07-15T12:00:00.000Z');
@@ -135,6 +136,7 @@ function makeService() {
   };
   const watchQueue = { startWatch: vi.fn().mockResolvedValue(undefined) };
   const intentEvents = { publish: vi.fn().mockResolvedValue(undefined) };
+  const webhookOutbox = { enqueue: vi.fn().mockResolvedValue(undefined) };
   const service = new PaymentIntentService(
     prisma as unknown as PrismaService,
     quoteService as unknown as QuoteService,
@@ -145,6 +147,7 @@ function makeService() {
     watchQueue as unknown as WatchQueueService,
     new FakeChainAdapter(),
     intentEvents as unknown as IntentEventsService,
+    webhookOutbox as unknown as WebhookOutboxService,
   );
   return {
     service,
@@ -153,6 +156,7 @@ function makeService() {
     referenceGenerator,
     watchQueue,
     intentEvents,
+    webhookOutbox,
   };
 }
 
@@ -393,6 +397,7 @@ describe('PaymentIntentService.transition', () => {
       status,
       flags,
       linkId,
+      merchantId: MERCHANT_ID,
     });
   }
 
@@ -433,6 +438,39 @@ describe('PaymentIntentService.transition', () => {
       service.transition('pi_1', { type: 'WATCH_STARTED' }),
     ).rejects.toMatchObject({ status: 409 });
     expect(intentEvents.publish).not.toHaveBeenCalled();
+  });
+
+  it('writes outbox rows in the transition transaction with the consumer event name (rule 3)', async () => {
+    const { service, prisma, webhookOutbox } = makeService();
+    lockReturns(prisma, 'CONFIRMED');
+    await service.transition('pi_1', {
+      type: 'PAYMENT_FINALIZED',
+      overpaid: false,
+    });
+    expect(webhookOutbox.enqueue).toHaveBeenCalledWith(
+      prisma, // the $transaction mock passes prisma itself as tx
+      expect.objectContaining({
+        merchantId: MERCHANT_ID,
+        intentId: 'pi_1',
+        event: 'intent.finalized',
+        intent: expect.objectContaining({ status: 'FINALIZED' }),
+      }),
+    );
+
+    webhookOutbox.enqueue.mockClear();
+    lockReturns(prisma, 'FINALIZED');
+    await service.transition('pi_1', { type: 'DUPLICATE_PAYMENT_DETECTED' });
+    expect(webhookOutbox.enqueue).toHaveBeenCalledWith(
+      prisma,
+      expect.objectContaining({ event: 'intent.duplicate_payment' }),
+    );
+
+    webhookOutbox.enqueue.mockClear();
+    lockReturns(prisma, 'FINALIZED');
+    await expect(
+      service.transition('pi_1', { type: 'WATCH_STARTED' }),
+    ).rejects.toMatchObject({ status: 409 });
+    expect(webhookOutbox.enqueue).not.toHaveBeenCalled(); // no webhook without a transition
   });
 
   it('rejects an invalid event with a 409 conflict and writes nothing', async () => {

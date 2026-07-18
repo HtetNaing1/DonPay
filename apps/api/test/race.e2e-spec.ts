@@ -16,6 +16,7 @@ import { PrismaService } from '../src/prisma/prisma.service';
 import { IntentEventsService } from '../src/queues/intent-events.service';
 import { WatchQueueService } from '../src/queues/watch-queue.service';
 import { QuoteService } from '../src/rates/quote.service';
+import { WebhookOutboxService } from '../src/webhooks/webhook-outbox.service';
 
 /**
  * The two race guarantees, proven against REAL Postgres — mocks cannot
@@ -41,6 +42,9 @@ const service = new PaymentIntentService(
   { startWatch: async () => undefined } as unknown as WatchQueueService,
   new FakeChainAdapter(), // payment URLs in the returned views
   { publish: async () => undefined } as unknown as IntentEventsService,
+  // real outbox: the race merchant has no endpoints, so no rows are written,
+  // but the query runs inside the contended transaction like production
+  new WebhookOutboxService({ now: () => new Date() }),
 );
 
 let merchantId: string;

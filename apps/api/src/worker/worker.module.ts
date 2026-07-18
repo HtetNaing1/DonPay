@@ -9,7 +9,9 @@ import { Env } from '../config/env';
 import { IntentsModule } from '../intents/intents.module';
 import { PrismaModule } from '../prisma/prisma.module';
 import { QueuesModule } from '../queues/queues.module';
+import { WebhooksModule } from '../webhooks/webhooks.module';
 import { WatchWorker } from './watch.worker';
+import { WebhookWorker } from './webhook.worker';
 
 /**
  * Root module of the worker entry point (`src/worker.ts`) — the second
@@ -35,10 +37,12 @@ import { WatchWorker } from './watch.worker';
     ChainModule,
     IntentsModule,
     QueuesModule,
+    WebhooksModule,
   ],
   providers: [
     ChainWatcherService,
     WatchWorker,
+    WebhookWorker,
     { provide: CLOCK, useClass: SystemClock },
   ],
 })

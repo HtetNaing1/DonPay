@@ -8,6 +8,7 @@ import {
   OpenLinkIntentInput,
   PaymentIntentView,
   PayToken,
+  WebhookEvent,
 } from '@donpay/shared';
 import { CHAIN_ADAPTER, ChainAdapter } from '../chain/chain-adapter';
 import {
@@ -25,6 +26,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { IntentEventsService } from '../queues/intent-events.service';
 import { WatchQueueService } from '../queues/watch-queue.service';
 import { QuoteService } from '../rates/quote.service';
+import { WebhookOutboxService } from '../webhooks/webhook-outbox.service';
 import {
   decideTransition,
   IntentEvent,
@@ -59,6 +61,7 @@ export class PaymentIntentService {
     private readonly watchQueue: WatchQueueService,
     @Inject(CHAIN_ADAPTER) private readonly chainAdapter: ChainAdapter,
     private readonly intentEvents: IntentEventsService,
+    private readonly webhookOutbox: WebhookOutboxService,
   ) {}
 
   /** `POST /v1/payment-intents` — same key + same merchant replays, never re-executes (rule 5). */
@@ -174,7 +177,7 @@ export class PaymentIntentService {
       }
       const current = await tx.paymentIntent.findUniqueOrThrow({
         where: { id: intentId },
-        select: { status: true, flags: true, linkId: true },
+        select: { status: true, flags: true, linkId: true, merchantId: true },
       });
 
       const decision = decideTransition(current.status, event);
@@ -215,7 +218,19 @@ export class PaymentIntentService {
           event: event.type,
         },
       });
-      return this.toView(row);
+      const transitioned = this.toView(row);
+      // Outbox rows share this transaction (rule 3): a webhook can never
+      // fire for a transition that didn't commit, or be lost by one that did
+      await this.webhookOutbox.enqueue(tx, {
+        merchantId: current.merchantId,
+        intentId,
+        event:
+          event.type === 'DUPLICATE_PAYMENT_DETECTED'
+            ? 'intent.duplicate_payment'
+            : (`intent.${decision.to.toLowerCase()}` as WebhookEvent),
+        intent: transitioned,
+      });
+      return transitioned;
     });
 
     // Post-commit fan-out to live checkout pages (WS gateway subscribes).
