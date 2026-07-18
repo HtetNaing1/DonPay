@@ -4,6 +4,7 @@
     "node_modules",
     "test",
     "dist",
+    "scripts",
     "**/*spec.ts",
     "**/*.contract.ts",
     "vitest.config.ts",

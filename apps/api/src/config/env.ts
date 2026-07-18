@@ -37,6 +37,15 @@ export const envSchema = z.object({
   SOLANA_RPC_URL: z.url().default('https://api.devnet.solana.com'),
   /** SPL mint accepted as USDC; default is Circle's devnet USDC. */
   USDC_MINT: z.string().min(32).default('4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU'),
+  /** BullMQ queue backing store — watcher jobs persist here (NFR-4: restart-safe). */
+  REDIS_URL: z.string().min(1).default('redis://localhost:6379'),
+  /** Active watch poll interval (PLAN: 3s). */
+  WATCH_POLL_MS: z.coerce.number().int().positive().default(3_000),
+  /** Low-frequency tail watch interval after expiry (PLAN: 24h tail for LATE_PAYMENT). */
+  WATCH_TAIL_POLL_MS: z.coerce.number().int().positive().default(600_000),
+  WATCH_TAIL_HOURS: z.coerce.number().int().positive().default(24),
+  /** Backoff ceiling when the RPC is erroring. */
+  WATCH_MAX_BACKOFF_MS: z.coerce.number().int().positive().default(60_000),
 });
 
 export type Env = z.infer<typeof envSchema>;

@@ -11,6 +11,7 @@ import {
   WalletAddress,
 } from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { WatchQueueService } from '../queues/watch-queue.service';
 import { Quote, QuoteService } from '../rates/quote.service';
 import { PaymentIntentService } from './payment-intent.service';
 
@@ -130,6 +131,7 @@ function makeService() {
   const config = {
     get: vi.fn(() => 'https://pay.test'),
   };
+  const watchQueue = { startWatch: vi.fn().mockResolvedValue(undefined) };
   const service = new PaymentIntentService(
     prisma as unknown as PrismaService,
     quoteService as unknown as QuoteService,
@@ -137,8 +139,9 @@ function makeService() {
     referenceGenerator,
     clock,
     config as unknown as ConfigService<Env, true>,
+    watchQueue as unknown as WatchQueueService,
   );
-  return { service, prisma, quoteService, referenceGenerator };
+  return { service, prisma, quoteService, referenceGenerator, watchQueue };
 }
 
 function uniqueViolation(): Prisma.PrismaClientKnownRequestError {
@@ -189,6 +192,12 @@ describe('PaymentIntentService.createFromApi', () => {
     expect(view.checkoutUrl).toBe('https://pay.test/checkout/pi_1');
   });
 
+  it('starts the chain watch after the intent commits', async () => {
+    const { service, watchQueue } = makeService();
+    await service.createFromApi(MERCHANT_ID, API_INPUT);
+    expect(watchQueue.startWatch).toHaveBeenCalledWith('pi_1');
+  });
+
   it('409s payout_wallet_missing before pricing when no verified default wallet exists', async () => {
     const { service, prisma, quoteService } = makeService();
     prisma.walletAddress.findFirst.mockResolvedValue(null);
@@ -201,7 +210,7 @@ describe('PaymentIntentService.createFromApi', () => {
   });
 
   it('replays a stored Idempotency-Key response without re-executing (rule 5)', async () => {
-    const { service, prisma, quoteService } = makeService();
+    const { service, prisma, quoteService, watchQueue } = makeService();
     const storedView = { id: 'pi_stored' };
     prisma.idempotencyRecord.findUnique.mockResolvedValue({
       response: storedView,
@@ -215,6 +224,8 @@ describe('PaymentIntentService.createFromApi', () => {
     });
     expect(quoteService.createQuote).not.toHaveBeenCalled();
     expect(prisma.paymentIntent.create).not.toHaveBeenCalled();
+    // the original request already started the watch — a replay must not double it
+    expect(watchQueue.startWatch).not.toHaveBeenCalled();
   });
 
   it('writes the idempotency record in the same transaction as the intent', async () => {

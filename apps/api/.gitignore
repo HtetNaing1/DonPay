@@ -3,3 +3,6 @@ node_modules
 .env
 
 /src/generated/
+
+# local devnet payer key for scripts/pay-intent.ts — never commit keys
+scripts/.devnet-payer.json
