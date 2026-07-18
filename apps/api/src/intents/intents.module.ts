@@ -3,6 +3,7 @@ import { AuthModule } from '../auth/auth.module';
 import { ChainModule } from '../chain/chain.module';
 import { CLOCK, SystemClock } from '../common/clock';
 import { IdempotencyService } from '../common/idempotency.service';
+import { LinksModule } from '../links/links.module';
 import { QueuesModule } from '../queues/queues.module';
 import { RatesModule } from '../rates/rates.module';
 import { CheckoutController } from './checkout.controller';
@@ -14,7 +15,7 @@ import { PaymentIntentService } from './payment-intent.service';
  * PaymentIntentService.transition() — the state machine is the only writer.
  */
 @Module({
-  imports: [AuthModule, ChainModule, RatesModule, QueuesModule],
+  imports: [AuthModule, ChainModule, RatesModule, QueuesModule, LinksModule],
   controllers: [IntentsController, CheckoutController],
   providers: [
     PaymentIntentService,

@@ -35,7 +35,7 @@ Living checklist. One or two tasks per session, top to bottom. Check off in the 
 - [x] Watcher: BullMQ repeating job per PENDING intent (3s poll, backoff on RPC errors, persisted — restart-safe); stop conditions; 24h low-frequency tail watch after expiry → LATE_PAYMENT
 - [x] Under/overpayment handling per PLAN.md states; DUPLICATE_PAYMENT flag on completed one-time links
 - [x] Hosted checkout page: server-rendered intent data, QR + wallet deep link, expiry countdown, live status via WS gateway
-- [ ] `/pay/[slug]`: link → (amount input if PAYER_CHOOSES) → intent → redirect to checkout
+- [x] `/pay/[slug]`: link → (amount input if PAYER_CHOOSES) → intent → redirect to checkout
 - [ ] **Concurrency test:** N parallel workers hammer one intent with conflicting events → exactly one winning transition path, zero double-writes
 - [ ] **One-time link race test:** two simultaneous payments → first finalized wins, second flagged DUPLICATE_PAYMENT
 

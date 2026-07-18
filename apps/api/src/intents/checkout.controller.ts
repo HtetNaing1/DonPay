@@ -4,8 +4,10 @@ import {
   OpenLinkIntentInput,
   openLinkIntentSchema,
   PaymentIntentView,
+  PublicLink,
 } from '@donpay/shared';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
+import { LinksService } from '../links/links.service';
 import { PaymentIntentService } from './payment-intent.service';
 
 /**
@@ -15,7 +17,16 @@ import { PaymentIntentService } from './payment-intent.service';
  */
 @Controller('checkout')
 export class CheckoutController {
-  constructor(private readonly intentService: PaymentIntentService) {}
+  constructor(
+    private readonly intentService: PaymentIntentService,
+    private readonly linksService: LinksService,
+  ) {}
+
+  /** What `/pay/[slug]` renders before any intent exists — the link's payable terms. */
+  @Get('links/:slug')
+  link(@Param('slug') slug: string): Promise<PublicLink> {
+    return this.linksService.getPublicBySlug(slug);
+  }
 
   /** Link-open flow: `/pay/[slug]` posts here, then redirects to the checkout URL. */
   @Post('links/:slug/intents')

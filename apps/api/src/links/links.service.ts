@@ -3,6 +3,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import {
   CreatePaymentLinkInput,
   PaymentLinkView,
+  PublicLink,
   UpdatePaymentLinkInput,
 } from '@donpay/shared';
 import { Clock, CLOCK } from '../common/clock';
@@ -138,6 +139,31 @@ export class LinksService {
       }
       await tx.paymentLink.delete({ where: { id: row.id } });
     });
+  }
+
+  /**
+   * The public `/pay/[slug]` read — the one unscoped link lookup (a payer is
+   * not a merchant; the slug is the capability). Returns only payable terms;
+   * effective status included so the page can explain a closed link.
+   */
+  async getPublicBySlug(slug: string): Promise<PublicLink> {
+    const row = await this.prisma.paymentLink.findUnique({
+      where: { slug },
+      include: { merchant: { select: { name: true } } },
+    });
+    if (!row) throw this.notFound();
+    return {
+      slug: row.slug,
+      merchantName: row.merchant.name,
+      amountMode: row.amountMode,
+      fiatCurrency: row.fiatCurrency as PublicLink['fiatCurrency'],
+      amountFiat: row.amountFiat,
+      minFiat: row.minFiat,
+      maxFiat: row.maxFiat,
+      token: row.token,
+      note: row.note,
+      status: effectiveLinkStatus(row, this.clock.now()),
+    };
   }
 
   private toView(row: PaymentLink): PaymentLinkView {
