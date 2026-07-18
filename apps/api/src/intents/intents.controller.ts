@@ -15,9 +15,8 @@ import {
 } from '@donpay/shared';
 import { ApiKeyGuard } from '../auth/api-key.guard';
 import { CurrentMerchant } from '../auth/current-merchant.decorator';
+import { normalizeIdempotencyKey } from '../common/idempotency.service';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
-import { ERROR_CODES } from '../common/problem/error-codes';
-import { ProblemException } from '../common/problem/problem.exception';
 import { Merchant } from '../generated/prisma/client';
 import { PaymentIntentService } from './payment-intent.service';
 
@@ -49,18 +48,4 @@ export class IntentsController {
   ): Promise<PaymentIntentView> {
     return this.intentService.get(merchant.id, intentId);
   }
-}
-
-/** The header is optional, but if sent it must be usable as a storage key. */
-function normalizeIdempotencyKey(header?: string): string | undefined {
-  if (header === undefined) return undefined;
-  const key = header.trim();
-  if (key.length === 0 || key.length > 255) {
-    throw new ProblemException(
-      400,
-      ERROR_CODES.VALIDATION_FAILED,
-      'Idempotency-Key must be 1–255 non-blank characters',
-    );
-  }
-  return key;
 }

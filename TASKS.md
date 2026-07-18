@@ -41,7 +41,7 @@ Living checklist. One or two tasks per session, top to bottom. Check off in the 
 
 ## Week 3 — Webhooks, dashboard, docs, ship
 
-- [ ] `/v1/payment-links` API-key surface: reuse LinksService + IdempotencyService (rule 5) behind ApiKeyGuard
+- [x] `/v1/payment-links` API-key surface: reuse LinksService + IdempotencyService (rule 5) behind ApiKeyGuard
 - [x] Outbox: WebhookDelivery rows written in transition transaction; dispatcher worker with HMAC signing, 5 retries exponential backoff, dead-letter status
 - [x] Webhook endpoint CRUD API + delivery log + redeliver (secret shown once)
 - [ ] Webhooks dashboard UI: endpoints, delivery log table, redeliver button

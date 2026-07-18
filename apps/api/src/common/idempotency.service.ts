@@ -2,6 +2,22 @@ import { createHash } from 'node:crypto';
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { ERROR_CODES } from './problem/error-codes';
+import { ProblemException } from './problem/problem.exception';
+
+/** The header is optional, but if sent it must be usable as a storage key. */
+export function normalizeIdempotencyKey(header?: string): string | undefined {
+  if (header === undefined) return undefined;
+  const key = header.trim();
+  if (key.length === 0 || key.length > 255) {
+    throw new ProblemException(
+      400,
+      ERROR_CODES.VALIDATION_FAILED,
+      'Idempotency-Key must be 1–255 non-blank characters',
+    );
+  }
+  return key;
+}
 
 /**
  * Idempotency-Key storage (CLAUDE.md rule 5): same key + same merchant

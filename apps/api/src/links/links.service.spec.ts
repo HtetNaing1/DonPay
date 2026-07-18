@@ -1,6 +1,7 @@
 import { CreatePaymentLinkInput } from '@donpay/shared';
 import { describe, expect, it, vi } from 'vitest';
 import { Clock } from '../common/clock';
+import { IdempotencyService } from '../common/idempotency.service';
 import { PaymentLink, Prisma } from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { effectiveLinkStatus } from './link-status';
@@ -22,13 +23,21 @@ function makeService() {
     paymentIntent: {
       count: vi.fn().mockResolvedValue(0),
     },
+    idempotencyRecord: {
+      findUnique: vi.fn().mockResolvedValue(null),
+      create: vi.fn().mockResolvedValue(undefined),
+    },
     $transaction: vi.fn(
       (callback: (tx: unknown) => Promise<unknown>): Promise<unknown> =>
         callback(prisma),
     ),
   };
   const clock: Clock = { now: () => NOW };
-  const service = new LinksService(prisma as unknown as PrismaService, clock);
+  const service = new LinksService(
+    prisma as unknown as PrismaService,
+    clock,
+    new IdempotencyService(prisma as unknown as PrismaService),
+  );
   return { service, prisma };
 }
 
@@ -106,6 +115,54 @@ describe('LinksService.create', () => {
     expect(prisma.paymentLink.create).toHaveBeenCalledTimes(2);
     const [first, second] = prisma.paymentLink.create.mock.calls;
     expect(first[0].data.slug).not.toBe(second[0].data.slug);
+  });
+
+  it('replays a stored Idempotency-Key response without re-creating (rule 5)', async () => {
+    const { service, prisma } = makeService();
+    const stored = { id: 'l_stored', slug: 'stored' };
+    prisma.idempotencyRecord.findUnique.mockResolvedValue({ response: stored });
+
+    const view = await service.create(MERCHANT_ID, FIXED_INPUT, 'key-1');
+
+    expect(view).toEqual(stored);
+    expect(prisma.paymentLink.create).not.toHaveBeenCalled();
+  });
+
+  it('writes the idempotency record in the same transaction as the link', async () => {
+    const { service, prisma } = makeService();
+    prisma.paymentLink.create.mockImplementation(
+      ({ data }: { data: PaymentLink }) => Promise.resolve(linkRow(data)),
+    );
+
+    const view = await service.create(MERCHANT_ID, FIXED_INPUT, 'key-1');
+
+    expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+    expect(prisma.idempotencyRecord.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          key: 'key-1',
+          merchantId: MERCHANT_ID,
+          response: view,
+        }),
+      }),
+    );
+  });
+
+  it("replays the winner's link after losing a same-key race", async () => {
+    const { service, prisma } = makeService();
+    const stored = { id: 'l_winner', slug: 'winner' };
+    prisma.idempotencyRecord.findUnique
+      .mockResolvedValueOnce(null)
+      .mockResolvedValue({ response: stored });
+    prisma.paymentLink.create.mockRejectedValue(
+      new Prisma.PrismaClientKnownRequestError('unique', {
+        code: 'P2002',
+        clientVersion: 'test',
+      }),
+    );
+
+    const view = await service.create(MERCHANT_ID, FIXED_INPUT, 'key-1');
+    expect(view).toEqual(stored);
   });
 });
 

@@ -7,6 +7,7 @@ import {
   UpdatePaymentLinkInput,
 } from '@donpay/shared';
 import { Clock, CLOCK } from '../common/clock';
+import { IdempotencyService } from '../common/idempotency.service';
 import { ERROR_CODES } from '../common/problem/error-codes';
 import { ProblemException } from '../common/problem/problem.exception';
 import { PaymentLink, Prisma } from '../generated/prisma/client';
@@ -23,41 +24,66 @@ export class LinksService {
   constructor(
     private readonly prisma: PrismaService,
     @Inject(CLOCK) private readonly clock: Clock,
+    private readonly idempotency: IdempotencyService,
   ) {}
 
+  /**
+   * Create a link. With an Idempotency-Key (the `/v1` surface — rule 5) the
+   * record is written in the same transaction as the link, so retries replay
+   * instead of re-creating. The 64-bit random slug's unique constraint is
+   * handled by retrying the whole transaction — a P2002 aborts a Postgres
+   * transaction, so the re-mint must wrap it, not sit inside it.
+   */
   async create(
     merchantId: string,
     input: CreatePaymentLinkInput,
+    idempotencyKey?: string,
   ): Promise<PaymentLinkView> {
-    // 64-bit random slug; unique constraint + re-mint covers the collision
+    if (idempotencyKey) {
+      const stored = await this.idempotency.find(merchantId, idempotencyKey);
+      if (stored) return stored as PaymentLinkView;
+    }
     for (let attempt = 0; ; attempt++) {
       const slug = randomBytes(8).toString('base64url');
       try {
-        const row = await this.prisma.paymentLink.create({
-          data: {
-            merchantId,
-            slug,
-            type: input.type,
-            amountMode: input.amountMode,
-            fiatCurrency: input.fiatCurrency,
-            amountFiat: input.amountFiat ?? null,
-            minFiat: input.minFiat ?? null,
-            maxFiat: input.maxFiat ?? null,
-            token: input.token,
-            note: input.note ?? null,
-            expiresAt: input.expiresAt ?? null,
-            // ONE_TIME is by definition single-use (PLAN.md)
-            maxUses: input.type === 'ONE_TIME' ? 1 : (input.maxUses ?? null),
-          },
+        return await this.prisma.$transaction(async (tx) => {
+          const row = await tx.paymentLink.create({
+            data: {
+              merchantId,
+              slug,
+              type: input.type,
+              amountMode: input.amountMode,
+              fiatCurrency: input.fiatCurrency,
+              amountFiat: input.amountFiat ?? null,
+              minFiat: input.minFiat ?? null,
+              maxFiat: input.maxFiat ?? null,
+              token: input.token,
+              note: input.note ?? null,
+              expiresAt: input.expiresAt ?? null,
+              // ONE_TIME is by definition single-use (PLAN.md)
+              maxUses: input.type === 'ONE_TIME' ? 1 : (input.maxUses ?? null),
+            },
+          });
+          const view = this.toView(row);
+          if (idempotencyKey) {
+            await this.idempotency.save(tx, merchantId, idempotencyKey, view);
+          }
+          return view;
         });
-        return this.toView(row);
       } catch (error) {
         if (
-          attempt < 2 &&
           error instanceof Prisma.PrismaClientKnownRequestError &&
           error.code === 'P2002'
         ) {
-          continue;
+          // lost a same-key race: the winner's record is committed — replay it
+          if (idempotencyKey) {
+            const stored = await this.idempotency.find(
+              merchantId,
+              idempotencyKey,
+            );
+            if (stored) return stored as PaymentLinkView;
+          }
+          if (attempt < 2) continue; // slug collision — re-mint and retry
         }
         throw error;
       }
