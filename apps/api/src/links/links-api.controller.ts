@@ -3,6 +3,7 @@ import {
   Controller,
   Delete,
   Get,
+  Headers,
   HttpCode,
   Param,
   Patch,
@@ -16,19 +17,22 @@ import {
   UpdatePaymentLinkInput,
   updatePaymentLinkSchema,
 } from '@donpay/shared';
+import { ApiKeyGuard } from '../auth/api-key.guard';
 import { CurrentMerchant } from '../auth/current-merchant.decorator';
-import { SessionGuard } from '../auth/session.guard';
+import { normalizeIdempotencyKey } from '../common/idempotency.service';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
 import { Merchant } from '../generated/prisma/client';
 import { LinksService } from './links.service';
 
 /**
- * Dashboard surface (session auth). The API-key surface lives in
- * LinksApiController (`/v1/payment-links`) — same LinksService underneath.
+ * Developer API surface (`sk_` key auth) — same LinksService as the
+ * dashboard, no divergence (rule 12: the web app is just another client).
+ * Idempotency-Key applies to POST (rule 5); PATCH and DELETE are naturally
+ * idempotent.
  */
-@Controller('merchants/me/links')
-@UseGuards(SessionGuard)
-export class LinksController {
+@Controller('v1/payment-links')
+@UseGuards(ApiKeyGuard)
+export class LinksApiController {
   constructor(private readonly linksService: LinksService) {}
 
   @Get()
@@ -50,8 +54,13 @@ export class LinksController {
     @CurrentMerchant() merchant: Merchant,
     @Body(new ZodValidationPipe(createPaymentLinkSchema))
     body: CreatePaymentLinkInput,
+    @Headers('idempotency-key') idempotencyKey?: string,
   ): Promise<PaymentLinkView> {
-    return this.linksService.create(merchant.id, body);
+    return this.linksService.create(
+      merchant.id,
+      body,
+      normalizeIdempotencyKey(idempotencyKey),
+    );
   }
 
   @Patch(':id')
