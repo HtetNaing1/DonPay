@@ -16,7 +16,7 @@ import { cn } from '@/lib/utils';
 const NAV = [
   { label: 'Payments', icon: ArrowLeftRight, href: '/dashboard' },
   { label: 'Payment links', icon: Link2, href: '/dashboard/links' },
-  { label: 'Webhooks', icon: Webhook },
+  { label: 'Webhooks', icon: Webhook, href: '/dashboard/webhooks' },
   { label: 'API keys', icon: KeyRound, href: '/dashboard/api-keys' },
   { label: 'Wallets', icon: Wallet, href: '/dashboard/wallets' },
   { label: 'Settings', icon: Settings },
