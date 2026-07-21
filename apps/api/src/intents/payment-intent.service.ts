@@ -5,6 +5,9 @@ import {
   CreatePaymentIntentInput,
   FiatCurrency,
   fiatMinorToMajor,
+  IntentDetail,
+  IntentSummary,
+  ListIntentsQuery,
   OpenLinkIntentInput,
   PaymentIntentView,
   PayToken,
@@ -145,6 +148,80 @@ export class PaymentIntentService {
       );
     }
     return this.toView(row);
+  }
+
+  /**
+   * The dashboard payments list — merchant-scoped (rule 4), newest first,
+   * optionally narrowed by state and/or originating link. Session auth.
+   */
+  async listForMerchant(
+    merchantId: string,
+    filter: ListIntentsQuery,
+  ): Promise<IntentSummary[]> {
+    const rows = await this.prisma.paymentIntent.findMany({
+      where: {
+        merchantId,
+        ...(filter.status ? { status: filter.status } : {}),
+        ...(filter.linkId ? { linkId: filter.linkId } : {}),
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 100,
+      include: { link: { select: { slug: true } } },
+    });
+    return rows.map((row) => ({
+      id: row.id,
+      reference: row.reference,
+      status: row.status,
+      flags: row.flags as IntentSummary['flags'],
+      fiatCurrency: row.fiatCurrency as FiatCurrency,
+      amountFiat: row.amountFiat,
+      token: row.token,
+      amountToken: row.amountToken.toString(),
+      linkId: row.linkId,
+      linkSlug: row.link?.slug ?? null,
+      note: row.note,
+      createdAt: row.createdAt.toISOString(),
+    }));
+  }
+
+  /**
+   * One intent for the dashboard detail page: the ticket plus its full audit
+   * timeline and any on-chain payments. Merchant-scoped (rule 4).
+   */
+  async getDetail(merchantId: string, intentId: string): Promise<IntentDetail> {
+    const row = await this.prisma.paymentIntent.findFirst({
+      where: { id: intentId, merchantId },
+      include: {
+        link: { select: { slug: true } },
+        transitions: { orderBy: { createdAt: 'asc' } },
+        payments: { orderBy: { slot: 'asc' } },
+      },
+    });
+    if (!row) {
+      throw new ProblemException(
+        404,
+        ERROR_CODES.NOT_FOUND,
+        'Payment intent not found',
+      );
+    }
+    return {
+      ...this.toView(row),
+      linkSlug: row.link?.slug ?? null,
+      transitions: row.transitions.map((t) => ({
+        fromStatus: t.fromStatus,
+        toStatus: t.toStatus,
+        event: t.event,
+        at: t.createdAt.toISOString(),
+      })),
+      payments: row.payments.map((p) => ({
+        txSignature: p.txSignature,
+        amountToken: p.amountToken.toString(),
+        payerAddress: p.payerAddress,
+        slot: p.slot.toString(),
+        detectedAt: p.detectedAt.toISOString(),
+        finalizedAt: p.finalizedAt?.toISOString() ?? null,
+      })),
+    };
   }
 
   /**

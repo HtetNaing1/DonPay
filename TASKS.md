@@ -45,7 +45,7 @@ Living checklist. One or two tasks per session, top to bottom. Check off in the 
 - [x] Outbox: WebhookDelivery rows written in transition transaction; dispatcher worker with HMAC signing, 5 retries exponential backoff, dead-letter status
 - [x] Webhook endpoint CRUD API + delivery log + redeliver (secret shown once)
 - [x] Webhooks dashboard UI: endpoints, delivery log table, redeliver button
-- [ ] Dashboard: payments list (filter by status/link) + detail with state timeline and explorer links
+- [x] Dashboard: payments list (filter by status/link) + detail with state timeline and explorer links
 - [ ] Dashboard: reconciliation view (DB vs chain per merchant, daily)
 - [ ] Devnet banner on every surface; landing page with the "why not just a wallet address" pitch
 

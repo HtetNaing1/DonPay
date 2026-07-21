@@ -9,6 +9,7 @@ import { RatesModule } from '../rates/rates.module';
 import { WebhooksModule } from '../webhooks/webhooks.module';
 import { CheckoutController } from './checkout.controller';
 import { IntentsController } from './intents.controller';
+import { MerchantIntentsController } from './merchant-intents.controller';
 import { PaymentIntentService } from './payment-intent.service';
 
 /**
@@ -24,7 +25,7 @@ import { PaymentIntentService } from './payment-intent.service';
     LinksModule,
     WebhooksModule,
   ],
-  controllers: [IntentsController, CheckoutController],
+  controllers: [IntentsController, MerchantIntentsController, CheckoutController],
   providers: [
     PaymentIntentService,
     IdempotencyService,

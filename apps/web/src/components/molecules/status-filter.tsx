@@ -8,11 +8,11 @@ export interface StatusFilterOption<T extends string> {
 
 /** Segmented status filter with live counts. Presentational — the owner holds
  *  the selected value and decides how the counts are computed. */
-export function LinkStatusFilter<T extends string>({
+export function StatusFilter<T extends string>({
   value,
   options,
   onChange,
-  ariaLabel = 'Filter links by status',
+  ariaLabel = 'Filter by status',
 }: {
   value: T;
   options: readonly StatusFilterOption<T>[];
