@@ -51,7 +51,7 @@ const DEFAULTS: PaymentLinkFormInput = {
 };
 
 /** Create a payment link. No rate is locked here — quotes happen at checkout open. */
-export function LinkForm() {
+export function LinkForm({ onCancel }: { onCancel?: () => void } = {}) {
   const router = useRouter();
   const [rootError, setRootError] = useState<string | null>(null);
   const [created, setCreated] = useState<PaymentLinkView | null>(null);
@@ -254,13 +254,24 @@ export function LinkForm() {
           </p>
         )}
 
-        <button
-          type="submit"
-          disabled={isSubmitting}
-          className="inline-flex h-11 cursor-pointer items-center justify-center rounded-md bg-brand px-5 text-sm font-medium text-brand-foreground transition-colors duration-200 hover:bg-brand-deep focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand disabled:cursor-default disabled:opacity-60"
-        >
-          {isSubmitting ? 'Creating…' : 'Create link'}
-        </button>
+        <div className="flex items-center gap-2.5">
+          <button
+            type="submit"
+            disabled={isSubmitting}
+            className="inline-flex h-11 cursor-pointer items-center justify-center rounded-md bg-brand px-5 text-sm font-medium text-brand-foreground transition-colors duration-200 hover:bg-brand-deep focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand disabled:cursor-default disabled:opacity-60"
+          >
+            {isSubmitting ? 'Creating…' : 'Create link'}
+          </button>
+          {onCancel && (
+            <button
+              type="button"
+              onClick={onCancel}
+              className="inline-flex h-11 cursor-pointer items-center justify-center rounded-md border border-hairline bg-surface px-5 text-sm font-medium text-ink transition-colors duration-200 hover:border-ink-soft/50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
+            >
+              Cancel
+            </button>
+          )}
+        </div>
       </form>
 
       {created && (

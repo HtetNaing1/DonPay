@@ -8,7 +8,14 @@ import { ConfirmDialog } from '@/components/molecules/confirm-dialog';
 import { PaymentLinkRow } from '@/components/molecules/payment-link-row';
 
 /** Merchant's links with pause/resume/delete controls; owns client-side URL building. */
-export function LinksTable({ links }: { links: PaymentLinkView[] }) {
+export function LinksTable({
+  links,
+  emptyState,
+}: {
+  links: PaymentLinkView[];
+  /** Shown in place of rows when the list is empty (owner tailors the copy). */
+  emptyState?: React.ReactNode;
+}) {
   // window is unavailable during SSR; links copy/QR need the absolute origin
   const [origin, setOrigin] = useState('');
   const [linkToDelete, setLinkToDelete] = useState<PaymentLinkView | null>(null);
@@ -16,12 +23,16 @@ export function LinksTable({ links }: { links: PaymentLinkView[] }) {
 
   if (links.length === 0) {
     return (
-      <div className="px-6 py-14 text-center">
-        <p className="font-mono text-[13px] text-ink-soft">No payment links yet</p>
-        <p className="mx-auto mt-2 max-w-sm text-sm leading-relaxed text-ink-soft/80">
-          Create your first link above — share the URL or QR and payments will land in the ledger.
-        </p>
-      </div>
+      <>
+        {emptyState ?? (
+          <div className="px-6 py-14 text-center">
+            <p className="font-mono text-[13px] text-ink-soft">No payment links yet</p>
+            <p className="mx-auto mt-2 max-w-sm text-sm leading-relaxed text-ink-soft/80">
+              Create one to share a hosted checkout — payments land straight in your ledger.
+            </p>
+          </div>
+        )}
+      </>
     );
   }
 

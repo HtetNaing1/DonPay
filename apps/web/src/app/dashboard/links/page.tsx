@@ -1,7 +1,6 @@
 import type { Metadata } from 'next';
 import type { PaymentLinkView } from '@donpay/shared';
-import { LinkForm } from '@/components/organisms/link-form';
-import { LinksTable } from '@/components/organisms/links-table';
+import { LinksWorkspace } from '@/components/organisms/links-workspace';
 import { merchantApiFetch } from '@/lib/api-server';
 
 export const metadata: Metadata = {
@@ -23,21 +22,8 @@ export default async function LinksPage() {
       </div>
 
       <div className="rise-in" style={{ '--rise-order': 1 } as React.CSSProperties}>
-        <LinkForm />
+        <LinksWorkspace links={links} />
       </div>
-
-      <section
-        aria-labelledby="links-heading"
-        className="rise-in"
-        style={{ '--rise-order': 2 } as React.CSSProperties}
-      >
-        <h2 id="links-heading" className="font-display text-lg tracking-tight">
-          Your links
-        </h2>
-        <div className="mt-3 overflow-hidden rounded-xl border border-hairline bg-surface">
-          <LinksTable links={links} />
-        </div>
-      </section>
     </div>
   );
 }
