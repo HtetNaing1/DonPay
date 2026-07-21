@@ -4,9 +4,9 @@ import { useMemo, useState } from 'react';
 import type { PaymentLinkView } from '@donpay/shared';
 import { Plus, X } from 'lucide-react';
 import {
-  LinkStatusFilter,
+  StatusFilter,
   type StatusFilterOption,
-} from '@/components/molecules/link-status-filter';
+} from '@/components/molecules/status-filter';
 import { LinkForm } from '@/components/organisms/link-form';
 import { LinksTable } from '@/components/organisms/links-table';
 
@@ -92,7 +92,7 @@ export function LinksWorkspace({ links }: { links: PaymentLinkView[] }) {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         {hasLinks ? (
-          <LinkStatusFilter value={filter} options={options} onChange={setFilter} />
+          <StatusFilter value={filter} options={options} onChange={setFilter} />
         ) : (
           <span aria-hidden="true" />
         )}

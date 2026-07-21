@@ -52,6 +52,61 @@ export const paymentIntentSchema = z.object({
 });
 export type PaymentIntentView = z.infer<typeof paymentIntentSchema>;
 
+/** One row in the merchant's dashboard payments list (session auth). */
+export const intentSummarySchema = z.object({
+  id: z.string(),
+  reference: solanaAddressSchema,
+  status: intentStatusSchema,
+  flags: z.array(intentFlagSchema),
+  fiatCurrency: fiatCurrencySchema,
+  amountFiat: fiatMinorAmountSchema,
+  token: payTokenSchema,
+  amountToken: z.string().regex(/^\d+$/),
+  linkId: z.string().nullable(),
+  /** Slug of the link the intent opened from, if any — for the "Link" column. */
+  linkSlug: z.string().nullable(),
+  note: z.string().nullable(),
+  createdAt: z.iso.datetime(),
+});
+export type IntentSummary = z.infer<typeof intentSummarySchema>;
+
+/** Query params for the dashboard payments list — narrow by state and/or link. */
+export const listIntentsQuerySchema = z.object({
+  status: intentStatusSchema.optional(),
+  linkId: z.string().optional(),
+});
+export type ListIntentsQuery = z.infer<typeof listIntentsQuerySchema>;
+
+/** One audit row from the state machine — the detail page's timeline. */
+export const intentTransitionSchema = z.object({
+  fromStatus: intentStatusSchema,
+  toStatus: intentStatusSchema,
+  /** The event that drove the transition (e.g. PAYMENT_DETECTED). */
+  event: z.string(),
+  at: z.iso.datetime(),
+});
+export type IntentTransitionView = z.infer<typeof intentTransitionSchema>;
+
+/** An on-chain transfer the watcher matched to the intent. */
+export const onchainPaymentSchema = z.object({
+  txSignature: z.string(),
+  amountToken: z.string().regex(/^\d+$/),
+  payerAddress: solanaAddressSchema,
+  slot: z.string(),
+  detectedAt: z.iso.datetime(),
+  finalizedAt: z.iso.datetime().nullable(),
+});
+export type OnchainPaymentView = z.infer<typeof onchainPaymentSchema>;
+
+/** A single intent for the merchant's dashboard — the full ticket plus its
+ *  audit timeline and any on-chain payments seen. Session auth, merchant-scoped. */
+export const intentDetailSchema = paymentIntentSchema.extend({
+  linkSlug: z.string().nullable(),
+  transitions: z.array(intentTransitionSchema),
+  payments: z.array(onchainPaymentSchema),
+});
+export type IntentDetail = z.infer<typeof intentDetailSchema>;
+
 /**
  * What the public checkout page renders — no auth, addressed by unguessable
  * intent id. Superset of the ticket: who is being paid, the live state
