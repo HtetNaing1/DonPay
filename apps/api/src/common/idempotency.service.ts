@@ -39,6 +39,49 @@ export class IdempotencyService {
     return record?.response ?? null;
   }
 
+  /**
+   * The whole rule-5 dance in one place: with a key, replay a stored response
+   * if present; otherwise run `work` inside a transaction and persist its
+   * result in that same transaction (mutation + idempotency record commit or
+   * roll back together). A lost same-key race surfaces as a P2002 — caught
+   * here and turned into a replay. `replayed` lets callers skip post-commit
+   * side effects (e.g. starting a watch) that must not repeat on a retry.
+   * With no key, `work` simply runs once and nothing is stored.
+   */
+  async runOnce<T>(
+    merchantId: string,
+    key: string | undefined,
+    work: (tx: Prisma.TransactionClient) => Promise<T>,
+  ): Promise<{ value: T; replayed: boolean }> {
+    if (key) {
+      const stored = await this.find(merchantId, key);
+      if (stored) return { value: stored as T, replayed: true };
+    }
+    try {
+      const value = await this.prisma.$transaction(async (tx) => {
+        const result = await work(tx);
+        if (key) {
+          // result is a JSON-serializable view by construction (all callers
+          // pass DTOs); the cast crosses the generic → Prisma JSON boundary.
+          await this.save(
+            tx,
+            merchantId,
+            key,
+            result as unknown as Prisma.InputJsonValue,
+          );
+        }
+        return result;
+      });
+      return { value, replayed: false };
+    } catch (error) {
+      if (key && this.isConflict(error)) {
+        const stored = await this.find(merchantId, key);
+        if (stored) return { value: stored as T, replayed: true };
+      }
+      throw error;
+    }
+  }
+
   async save(
     tx: Prisma.TransactionClient,
     merchantId: string,

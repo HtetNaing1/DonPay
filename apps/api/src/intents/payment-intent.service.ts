@@ -23,7 +23,12 @@ import { IdempotencyService } from '../common/idempotency.service';
 import { ERROR_CODES } from '../common/problem/error-codes';
 import { ProblemException } from '../common/problem/problem.exception';
 import { Env } from '../config/env';
-import { PaymentIntent, PaymentLink } from '../generated/prisma/client';
+import {
+  IntentStatus,
+  PaymentIntent,
+  PaymentLink,
+  Prisma,
+} from '../generated/prisma/client';
 import { effectiveLinkStatus } from '../links/link-status';
 import { PrismaService } from '../prisma/prisma.service';
 import { IntentEventsService } from '../queues/intent-events.service';
@@ -45,6 +50,23 @@ interface MintParams {
   note: string | null;
   idempotencyKey?: string;
 }
+
+/**
+ * Intent status → the webhook event a transition into it emits. Explicit and
+ * exhaustive (the compiler rejects an unmapped status), so a new state can
+ * never silently ship an off-contract event name. CREATED is the initial
+ * status — no transition targets it — so it maps to null (emits nothing).
+ */
+const STATUS_WEBHOOK_EVENT: Record<IntentStatus, WebhookEvent | null> = {
+  CREATED: null,
+  PENDING: 'intent.pending',
+  DETECTED: 'intent.detected',
+  CONFIRMED: 'intent.confirmed',
+  FINALIZED: 'intent.finalized',
+  EXPIRED: 'intent.expired',
+  UNDERPAID: 'intent.underpaid',
+  LATE_PAYMENT: 'intent.late_payment',
+};
 
 /**
  * PaymentIntent lifecycle: creation (both doors: API and link-open) and
@@ -73,29 +95,22 @@ export class PaymentIntentService {
     input: CreatePaymentIntentInput,
     idempotencyKey?: string,
   ): Promise<PaymentIntentView> {
+    // Short-circuit a replay before pricing, so a retry never hits the rate
+    // source or starts a second watch. The lost-race path (both requests miss
+    // here, then collide on insert) is handled by mint → idempotency.runOnce.
     if (idempotencyKey) {
       const stored = await this.idempotency.find(merchantId, idempotencyKey);
       if (stored) return stored as PaymentIntentView;
     }
-    try {
-      return await this.mint({
-        merchantId,
-        linkId: null,
-        fiatCurrency: input.fiatCurrency,
-        amountFiat: input.amountFiat,
-        token: input.token,
-        note: input.note ?? null,
-        idempotencyKey,
-      });
-    } catch (error) {
-      // Lost a same-key race: our transaction rolled back, the winner's
-      // record is committed — replay it. Any other P2002 falls through.
-      if (idempotencyKey && this.idempotency.isConflict(error)) {
-        const stored = await this.idempotency.find(merchantId, idempotencyKey);
-        if (stored) return stored as PaymentIntentView;
-      }
-      throw error;
-    }
+    return this.mint({
+      merchantId,
+      linkId: null,
+      fiatCurrency: input.fiatCurrency,
+      amountFiat: input.amountFiat,
+      token: input.token,
+      note: input.note ?? null,
+      idempotencyKey,
+    });
   }
 
   /**
@@ -268,17 +283,8 @@ export class PaymentIntentService {
 
       const flags = new Set([...current.flags, ...decision.addFlags]);
       if (event.type === 'PAYMENT_FINALIZED' && current.linkId !== null) {
-        // Finalization consumes a link use, in the same transaction as the
-        // status write — this is what completes one-time links (their
-        // effective status derives from useCount). The atomic increment
-        // decides the FR-12 race: whichever intent pushes useCount past
-        // maxUses lost, and its payment is flagged — funds still moved
-        // on-chain, so it finalizes; it is surfaced, never swallowed.
-        const link = await tx.paymentLink.update({
-          where: { id: current.linkId },
-          data: { useCount: { increment: 1 } },
-        });
-        if (link.maxUses !== null && link.useCount > link.maxUses) {
+        // Finalization consumes a link use (FR-12) — see consumeLinkUse.
+        if (await this.consumeLinkUse(tx, current.linkId)) {
           flags.add('DUPLICATE_PAYMENT');
         }
       }
@@ -297,16 +303,16 @@ export class PaymentIntentService {
       });
       const transitioned = this.toView(row);
       // Outbox rows share this transaction (rule 3): a webhook can never
-      // fire for a transition that didn't commit, or be lost by one that did
-      await this.webhookOutbox.enqueue(tx, {
-        merchantId: current.merchantId,
-        intentId,
-        event:
-          event.type === 'DUPLICATE_PAYMENT_DETECTED'
-            ? 'intent.duplicate_payment'
-            : (`intent.${decision.to.toLowerCase()}` as WebhookEvent),
-        intent: transitioned,
-      });
+      // fire for a transition that didn't commit, or be lost by one that did.
+      const webhookEvent = this.webhookEventFor(event, decision.to);
+      if (webhookEvent) {
+        await this.webhookOutbox.enqueue(tx, {
+          merchantId: current.merchantId,
+          intentId,
+          event: webhookEvent,
+          intent: transitioned,
+        });
+      }
       return transitioned;
     });
 
@@ -430,42 +436,39 @@ export class PaymentIntentService {
       token: params.token,
     });
 
-    const view = await this.prisma.$transaction(async (tx) => {
-      const row = await tx.paymentIntent.create({
-        data: {
-          merchantId: params.merchantId,
-          linkId: params.linkId,
-          reference: this.referenceGenerator.generateReference(),
-          fiatCurrency: quote.fiatCurrency,
-          amountFiat: quote.amountFiatMinor,
-          token: quote.token,
-          amountToken: quote.amountTokenMinor,
-          rateLocked: quote.rate,
-          rateSource: quote.rateSource,
-          quoteExpiresAt: quote.lockedUntil,
-          payoutAddress: payoutWallet.address,
-          note: params.note,
-          idempotencyKey: params.idempotencyKey ?? null,
-        },
-      });
-      const created = this.toView(row);
-      if (params.idempotencyKey) {
-        // Same transaction as the intent: they commit or roll back together
-        await this.idempotency.save(
-          tx,
-          params.merchantId,
-          params.idempotencyKey,
-          created,
-        );
-      }
-      return created;
-    });
+    // runOnce persists the idempotency record in the same transaction as the
+    // intent (rule 5) and replays a stored response on a lost same-key race.
+    const { value, replayed } = await this.idempotency.runOnce(
+      params.merchantId,
+      params.idempotencyKey,
+      async (tx) => {
+        const row = await tx.paymentIntent.create({
+          data: {
+            merchantId: params.merchantId,
+            linkId: params.linkId,
+            reference: this.referenceGenerator.generateReference(),
+            fiatCurrency: quote.fiatCurrency,
+            amountFiat: quote.amountFiatMinor,
+            token: quote.token,
+            amountToken: quote.amountTokenMinor,
+            rateLocked: quote.rate,
+            rateSource: quote.rateSource,
+            quoteExpiresAt: quote.lockedUntil,
+            payoutAddress: payoutWallet.address,
+            note: params.note,
+            idempotencyKey: params.idempotencyKey ?? null,
+          },
+        });
+        return this.toView(row);
+      },
+    );
 
-    // Watch starts only after the intent is committed; the first tick applies
-    // WATCH_STARTED. If Redis is down we fail loudly — an unwatched intent
-    // would accept a payment nobody detects.
-    await this.watchQueue.startWatch(view.id);
-    return view;
+    // Watch starts only after the intent is committed, and only for a freshly
+    // created intent — a replayed response is already being watched. If Redis
+    // is down we fail loudly; an unwatched intent would accept a payment
+    // nobody detects.
+    if (!replayed) await this.watchQueue.startWatch(value.id);
+    return value;
   }
 
   private toView(row: PaymentIntent): PaymentIntentView {
@@ -498,5 +501,42 @@ export class PaymentIntentService {
 
   private badAmount(detail: string): ProblemException {
     return new ProblemException(400, ERROR_CODES.VALIDATION_FAILED, detail);
+  }
+
+  /**
+   * Finalization consumes a link use, in the same transaction as the status
+   * write — this is what completes one-time links (their effective status
+   * derives from useCount). The atomic increment decides the FR-12 race:
+   * whichever intent pushes useCount past maxUses lost, and its payment is
+   * flagged — funds still moved on-chain, so it finalizes; it is surfaced,
+   * never swallowed. Returns true when this use exceeded maxUses (the caller
+   * flags the intent DUPLICATE_PAYMENT).
+   */
+  private async consumeLinkUse(
+    tx: Prisma.TransactionClient,
+    linkId: string,
+  ): Promise<boolean> {
+    const link = await tx.paymentLink.update({
+      where: { id: linkId },
+      data: { useCount: { increment: 1 } },
+    });
+    return link.maxUses !== null && link.useCount > link.maxUses;
+  }
+
+  /**
+   * Which webhook event a transition emits (rule 3). Named after the target
+   * status via the exhaustive STATUS_WEBHOOK_EVENT map, except
+   * DUPLICATE_PAYMENT_DETECTED: it lands on an already-FINALIZED intent but
+   * must announce the duplicate, not re-announce finalization. null means
+   * "no event for this transition" (only CREATED, which is never a target).
+   */
+  private webhookEventFor(
+    event: IntentEvent,
+    to: IntentStatus,
+  ): WebhookEvent | null {
+    if (event.type === 'DUPLICATE_PAYMENT_DETECTED') {
+      return 'intent.duplicate_payment';
+    }
+    return STATUS_WEBHOOK_EVENT[to];
   }
 }

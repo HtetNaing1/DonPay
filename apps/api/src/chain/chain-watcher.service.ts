@@ -88,116 +88,130 @@ export class ChainWatcherService {
     }
   }
 
-  /** One state-driven step. Returns the next cadence, or null to stop the watch. */
-  private async step(intent: PaymentIntent): Promise<NextTick | null> {
+  /**
+   * One state-driven step: dispatch to the handler for the intent's current
+   * status. Each handler asks the chain what it needs, feeds events into
+   * transition(), and returns the next cadence (or null to stop the watch).
+   * UNDERPAID / LATE_PAYMENT are terminal — no handler, nothing to watch.
+   */
+  private step(intent: PaymentIntent): Promise<NextTick | null> {
     switch (intent.status) {
       case 'CREATED':
-        // first tick after creation (also covers a crash before this transition)
-        await this.intents.transition(intent.id, { type: 'WATCH_STARTED' });
-        return this.active();
-
-      case 'PENDING': {
-        const payments = await this.findPayments(intent);
-        if (payments.length > 0) {
-          await this.recordPayment(intent.id, payments[0]!);
-          await this.intents.transition(intent.id, {
-            type: 'PAYMENT_DETECTED',
-          });
-          return this.active();
-        }
-        if (intent.quoteExpiresAt <= this.clock.now()) {
-          await this.intents.transition(intent.id, { type: 'QUOTE_EXPIRED' });
-          return this.tail();
-        }
-        return this.active();
-      }
-
-      case 'DETECTED': {
-        const payment = await this.firstRecordedPayment(intent.id);
-        if (!payment) {
-          this.logger.warn(
-            `intent ${intent.id} is DETECTED but has no recorded payment — repolling`,
-          );
-          return this.active();
-        }
-        if (
-          classifyPaymentAmount(intent.amountToken, payment.amountToken) ===
-          'UNDERPAID'
-        ) {
-          await this.intents.transition(intent.id, {
-            type: 'PAYMENT_UNDERPAID',
-          });
-          return null; // terminal — merchant notified via the transition
-        }
-        const finality = await this.adapter.getFinality(payment.txSignature);
-        if (finality === 'CONFIRMED' || finality === 'FINALIZED') {
-          await this.intents.transition(intent.id, {
-            type: 'PAYMENT_CONFIRMED',
-          });
-        }
-        return this.active();
-      }
-
-      case 'CONFIRMED': {
-        const payment = await this.firstRecordedPayment(intent.id);
-        if (!payment) return this.active();
-        const finality = await this.adapter.getFinality(payment.txSignature);
-        if (finality !== 'FINALIZED') return this.active();
-        const overpaid =
-          classifyPaymentAmount(intent.amountToken, payment.amountToken) ===
-          'OVERPAID';
-        await this.intents.transition(intent.id, {
-          type: 'PAYMENT_FINALIZED',
-          overpaid,
-        });
-        await this.prisma.onchainPayment.update({
-          where: { id: payment.id },
-          data: { finalizedAt: this.clock.now() },
-        });
-        return this.tail(); // paid — now tail-watch for duplicate payments (FR-12)
-      }
-
-      case 'EXPIRED': {
-        const payments = await this.findPayments(intent);
-        if (payments.length > 0) {
-          await this.recordPayment(intent.id, payments[0]!);
-          await this.intents.transition(intent.id, {
-            type: 'LATE_PAYMENT_DETECTED',
-          });
-          return null; // terminal — flagged for merchant action, never dropped
-        }
-        if (this.tailOver(intent)) return null; // 24h tail watch is over
-        return this.tail();
-      }
-
-      case 'FINALIZED': {
-        // A second payment on an already-paid intent (double scan / wallet
-        // retry) is real money on-chain — record and flag it, never drop it.
-        if (this.tailOver(intent)) return null;
-        const payments = await this.findPayments(intent);
-        const known = await this.prisma.onchainPayment.findMany({
-          where: { intentId: intent.id },
-          select: { txSignature: true },
-        });
-        const knownSignatures = new Set(known.map((k) => k.txSignature));
-        const fresh = payments.filter(
-          (p) => !knownSignatures.has(p.txSignature),
-        );
-        if (fresh.length > 0) {
-          for (const payment of fresh) {
-            await this.recordPayment(intent.id, payment);
-          }
-          await this.intents.transition(intent.id, {
-            type: 'DUPLICATE_PAYMENT_DETECTED',
-          });
-        }
-        return this.tail();
-      }
-
-      // UNDERPAID / LATE_PAYMENT — nothing left to watch
+        return this.stepCreated(intent);
+      case 'PENDING':
+        return this.stepPending(intent);
+      case 'DETECTED':
+        return this.stepDetected(intent);
+      case 'CONFIRMED':
+        return this.stepConfirmed(intent);
+      case 'EXPIRED':
+        return this.stepExpired(intent);
+      case 'FINALIZED':
+        return this.stepFinalized(intent);
       default:
-        return null;
+        return Promise.resolve(null);
     }
+  }
+
+  /** First tick after creation (also covers a crash before this transition). */
+  private async stepCreated(intent: PaymentIntent): Promise<NextTick | null> {
+    await this.intents.transition(intent.id, { type: 'WATCH_STARTED' });
+    return this.active();
+  }
+
+  /** Awaiting payment: detect the first matching tx, or expire the quote. */
+  private async stepPending(intent: PaymentIntent): Promise<NextTick | null> {
+    const payments = await this.findPayments(intent);
+    if (payments.length > 0) {
+      await this.recordPayment(intent.id, payments[0]!);
+      await this.intents.transition(intent.id, { type: 'PAYMENT_DETECTED' });
+      return this.active();
+    }
+    if (intent.quoteExpiresAt <= this.clock.now()) {
+      await this.intents.transition(intent.id, { type: 'QUOTE_EXPIRED' });
+      return this.tail();
+    }
+    return this.active();
+  }
+
+  /** Payment seen: verify the amount, then wait for chain confirmation. */
+  private async stepDetected(intent: PaymentIntent): Promise<NextTick | null> {
+    const payment = await this.firstRecordedPayment(intent.id);
+    if (!payment) {
+      this.logger.warn(
+        `intent ${intent.id} is DETECTED but has no recorded payment — repolling`,
+      );
+      return this.active();
+    }
+    if (
+      classifyPaymentAmount(intent.amountToken, payment.amountToken) ===
+      'UNDERPAID'
+    ) {
+      await this.intents.transition(intent.id, { type: 'PAYMENT_UNDERPAID' });
+      return null; // terminal — merchant notified via the transition
+    }
+    const finality = await this.adapter.getFinality(payment.txSignature);
+    if (finality === 'CONFIRMED' || finality === 'FINALIZED') {
+      await this.intents.transition(intent.id, { type: 'PAYMENT_CONFIRMED' });
+    }
+    return this.active();
+  }
+
+  /** Confirmed: wait for finality, then finalize (flagging overpayment). */
+  private async stepConfirmed(intent: PaymentIntent): Promise<NextTick | null> {
+    const payment = await this.firstRecordedPayment(intent.id);
+    if (!payment) return this.active();
+    const finality = await this.adapter.getFinality(payment.txSignature);
+    if (finality !== 'FINALIZED') return this.active();
+    const overpaid =
+      classifyPaymentAmount(intent.amountToken, payment.amountToken) ===
+      'OVERPAID';
+    await this.intents.transition(intent.id, {
+      type: 'PAYMENT_FINALIZED',
+      overpaid,
+    });
+    await this.prisma.onchainPayment.update({
+      where: { id: payment.id },
+      data: { finalizedAt: this.clock.now() },
+    });
+    return this.tail(); // paid — now tail-watch for duplicate payments (FR-12)
+  }
+
+  /** Expired: the 24h tail may still catch a LATE_PAYMENT before it closes. */
+  private async stepExpired(intent: PaymentIntent): Promise<NextTick | null> {
+    const payments = await this.findPayments(intent);
+    if (payments.length > 0) {
+      await this.recordPayment(intent.id, payments[0]!);
+      await this.intents.transition(intent.id, {
+        type: 'LATE_PAYMENT_DETECTED',
+      });
+      return null; // terminal — flagged for merchant action, never dropped
+    }
+    if (this.tailOver(intent)) return null; // 24h tail watch is over
+    return this.tail();
+  }
+
+  /** Paid: tail-watch for a second on-chain payment (double scan) to flag. */
+  private async stepFinalized(intent: PaymentIntent): Promise<NextTick | null> {
+    // A second payment on an already-paid intent (double scan / wallet
+    // retry) is real money on-chain — record and flag it, never drop it.
+    if (this.tailOver(intent)) return null;
+    const payments = await this.findPayments(intent);
+    const known = await this.prisma.onchainPayment.findMany({
+      where: { intentId: intent.id },
+      select: { txSignature: true },
+    });
+    const knownSignatures = new Set(known.map((k) => k.txSignature));
+    const fresh = payments.filter((p) => !knownSignatures.has(p.txSignature));
+    if (fresh.length > 0) {
+      for (const payment of fresh) {
+        await this.recordPayment(intent.id, payment);
+      }
+      await this.intents.transition(intent.id, {
+        type: 'DUPLICATE_PAYMENT_DETECTED',
+      });
+    }
+    return this.tail();
   }
 
   private findPayments(intent: PaymentIntent): Promise<ChainPayment[]> {

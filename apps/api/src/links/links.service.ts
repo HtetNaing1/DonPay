@@ -39,51 +39,44 @@ export class LinksService {
     input: CreatePaymentLinkInput,
     idempotencyKey?: string,
   ): Promise<PaymentLinkView> {
-    if (idempotencyKey) {
-      const stored = await this.idempotency.find(merchantId, idempotencyKey);
-      if (stored) return stored as PaymentLinkView;
-    }
     for (let attempt = 0; ; attempt++) {
       const slug = randomBytes(8).toString('base64url');
       try {
-        return await this.prisma.$transaction(async (tx) => {
-          const row = await tx.paymentLink.create({
-            data: {
-              merchantId,
-              slug,
-              type: input.type,
-              amountMode: input.amountMode,
-              fiatCurrency: input.fiatCurrency,
-              amountFiat: input.amountFiat ?? null,
-              minFiat: input.minFiat ?? null,
-              maxFiat: input.maxFiat ?? null,
-              token: input.token,
-              note: input.note ?? null,
-              expiresAt: input.expiresAt ?? null,
-              // ONE_TIME is by definition single-use (PLAN.md)
-              maxUses: input.type === 'ONE_TIME' ? 1 : (input.maxUses ?? null),
-            },
-          });
-          const view = this.toView(row);
-          if (idempotencyKey) {
-            await this.idempotency.save(tx, merchantId, idempotencyKey, view);
-          }
-          return view;
-        });
+        // runOnce owns the idempotency-key replay + same-transaction save
+        // (rule 5). The only P2002 it re-throws is a slug collision, which the
+        // loop below re-mints — a key conflict is already replayed inside.
+        const { value } = await this.idempotency.runOnce(
+          merchantId,
+          idempotencyKey,
+          async (tx) => {
+            const row = await tx.paymentLink.create({
+              data: {
+                merchantId,
+                slug,
+                type: input.type,
+                amountMode: input.amountMode,
+                fiatCurrency: input.fiatCurrency,
+                amountFiat: input.amountFiat ?? null,
+                minFiat: input.minFiat ?? null,
+                maxFiat: input.maxFiat ?? null,
+                token: input.token,
+                note: input.note ?? null,
+                expiresAt: input.expiresAt ?? null,
+                // ONE_TIME is by definition single-use (PLAN.md)
+                maxUses: input.type === 'ONE_TIME' ? 1 : (input.maxUses ?? null),
+              },
+            });
+            return this.toView(row);
+          },
+        );
+        return value;
       } catch (error) {
         if (
           error instanceof Prisma.PrismaClientKnownRequestError &&
-          error.code === 'P2002'
+          error.code === 'P2002' &&
+          attempt < 2
         ) {
-          // lost a same-key race: the winner's record is committed — replay it
-          if (idempotencyKey) {
-            const stored = await this.idempotency.find(
-              merchantId,
-              idempotencyKey,
-            );
-            if (stored) return stored as PaymentLinkView;
-          }
-          if (attempt < 2) continue; // slug collision — re-mint and retry
+          continue; // slug collision — re-mint and retry
         }
         throw error;
       }
