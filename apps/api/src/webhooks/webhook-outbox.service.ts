@@ -22,28 +22,43 @@ export class WebhookOutboxService {
   constructor(@Inject(CLOCK) private readonly clock: Clock) {}
 
   async enqueue(
+    // The key detail of the whole pattern: this takes a `tx` (a transaction
+    // client), not the normal `this.prisma`. The caller — transition() — passes
+    // its OWN open transaction in, so the delivery rows written here are part of
+    // the SAME atomic unit as the status change. Either both commit or neither
+    // does. That is what "outbox" buys you: the intent to send is stored in the
+    // same DB write that made the state change true, so it can't be lost and
+    // can't fire for a change that rolled back.
     tx: Prisma.TransactionClient,
     entry: OutboxEntry,
   ): Promise<void> {
+    // Find which of this merchant's endpoints should hear about this event.
     const endpoints = await tx.webhookEndpoint.findMany({
       where: {
         merchantId: entry.merchantId,
         active: true,
-        // empty events array = subscribed to everything
+        // `OR`: match endpoints subscribed to everything (empty events list) OR
+        // to this specific event. `has` = "array column contains this value".
         OR: [{ events: { isEmpty: true } }, { events: { has: entry.event } }],
       },
       select: { id: true },
     });
+    // No subscribers → nothing to enqueue. Cheap early exit.
     if (endpoints.length === 0) return;
 
-    // payload is snapshotted at transition time — what the merchant is told
-    // is what was true when it happened, even if the intent moves on
+    // The payload is snapshotted NOW, at transition time. We freeze what was
+    // true when the event happened, so a webhook delivered minutes later (after
+    // retries) still describes the intent as it was at that moment — not its
+    // current, possibly-advanced state.
     const payload = {
       event: entry.event,
       occurredAt: this.clock.now().toISOString(),
       data: entry.intent,
     } as unknown as Prisma.InputJsonValue;
 
+    // One delivery row per subscribed endpoint (fan-out). createMany is a single
+    // bulk INSERT. Each starts life PENDING (the schema default) and due now, so
+    // the dispatcher will pick them up on its very next sweep.
     await tx.webhookDelivery.createMany({
       data: endpoints.map((endpoint) => ({
         endpointId: endpoint.id,

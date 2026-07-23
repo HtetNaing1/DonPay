@@ -25,16 +25,16 @@ export function PaymentRow({ intent }: { intent: IntentSummary }) {
             </span>
           ))}
         </p>
-        <p className="mt-0.5 truncate text-[13px] text-ink-soft">
-          {intent.note ?? (intent.linkSlug ? `/pay/${intent.linkSlug}` : 'Direct API charge')}
-        </p>
+        <p className="mt-0.5 truncate text-[13px] text-ink-soft">{intent.note ?? '—'}</p>
       </div>
 
-      <div className="hidden w-32 truncate font-mono text-[13px] text-ink-soft sm:block">
-        {intent.linkSlug ? `/pay/${intent.linkSlug}` : '—'}
+      <div className="hidden w-28 sm:block">
+        <span className="inline-flex items-center rounded-full border border-hairline px-2 py-0.5 text-[11px] font-medium text-ink-soft">
+          {intent.linkId ? 'Link' : 'Direct API'}
+        </span>
       </div>
 
-      <div className="w-32 text-sm text-ink">
+      <div className="w-32 text-sm text-ink tabular-nums">
         {fiatMinorToMajor(intent.amountFiat, intent.fiatCurrency)}
         <span className="text-ink-soft"> {intent.fiatCurrency}</span>
         <p className="mt-0.5 font-mono text-[11px] text-ink-soft/70">
@@ -42,12 +42,14 @@ export function PaymentRow({ intent }: { intent: IntentSummary }) {
         </p>
       </div>
 
-      <IntentStatusBadge status={intent.status} />
+      <div className="w-32">
+        <IntentStatusBadge status={intent.status} />
+      </div>
 
       <time
         dateTime={intent.createdAt}
         title={new Date(intent.createdAt).toLocaleString()}
-        className="w-24 text-right text-[13px] text-ink-soft"
+        className="w-24 text-right text-[13px] text-ink-soft tabular-nums"
       >
         {relativeTime(intent.createdAt)}
       </time>

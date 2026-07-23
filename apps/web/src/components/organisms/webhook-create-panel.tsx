@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   type CreatedWebhookEndpoint,
   type WebhookEvent,
@@ -24,7 +25,8 @@ const FALLBACK_ERROR = 'Something went wrong on our side. Try again in a moment.
  * Create an endpoint, then reveal its signing secret exactly once. The API
  * never returns the secret again, so the reveal stays until it is dismissed.
  */
-export function WebhookCreatePanel() {
+export function WebhookCreatePanel({ onCancel }: { onCancel?: () => void } = {}) {
+  const router = useRouter();
   const [url, setUrl] = useState('');
   const [selected, setSelected] = useState<Set<WebhookEvent>>(new Set());
   const [pending, setPending] = useState(false);
@@ -59,6 +61,7 @@ export function WebhookCreatePanel() {
     setCreated(result.data);
     setUrl('');
     setSelected(new Set());
+    router.refresh();
   };
 
   return (
@@ -126,13 +129,24 @@ export function WebhookCreatePanel() {
           </div>
         </fieldset>
 
-        <button
-          type="submit"
-          disabled={!canSubmit}
-          className="mt-5 inline-flex h-11 cursor-pointer items-center justify-center rounded-md bg-brand px-4 text-sm font-medium text-brand-foreground transition-colors duration-200 hover:bg-brand-deep focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand disabled:cursor-default disabled:opacity-60"
-        >
-          {pending ? 'Adding…' : 'Add endpoint'}
-        </button>
+        <div className="mt-5 flex items-center gap-2.5">
+          <button
+            type="submit"
+            disabled={!canSubmit}
+            className="inline-flex h-11 cursor-pointer items-center justify-center rounded-md bg-brand px-4 text-sm font-medium text-brand-foreground transition-colors duration-200 hover:bg-brand-deep focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand disabled:cursor-default disabled:opacity-60"
+          >
+            {pending ? 'Adding…' : 'Add endpoint'}
+          </button>
+          {onCancel && (
+            <button
+              type="button"
+              onClick={onCancel}
+              className="inline-flex h-11 cursor-pointer items-center justify-center rounded-md border border-hairline bg-surface px-5 text-sm font-medium text-ink transition-colors duration-200 hover:border-ink-soft/50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
+            >
+              Cancel
+            </button>
+          )}
+        </div>
       </form>
 
       {error && (

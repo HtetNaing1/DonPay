@@ -13,19 +13,30 @@ import { WebhookLogTable } from '@/components/organisms/webhook-log-table';
 import { cn } from '@/lib/utils';
 
 /** Merchant's endpoints with enable/disable, delete, and an expandable log. */
-export function WebhookEndpointsTable({ endpoints }: { endpoints: WebhookEndpointView[] }) {
+export function WebhookEndpointsTable({
+  endpoints,
+  emptyState,
+}: {
+  endpoints: WebhookEndpointView[];
+  /** Shown in place of rows when the list is empty (owner tailors the copy). */
+  emptyState?: React.ReactNode;
+}) {
   const [openId, setOpenId] = useState<string | null>(null);
   const [toDelete, setToDelete] = useState<WebhookEndpointView | null>(null);
 
   if (endpoints.length === 0) {
     return (
-      <div className="px-6 py-14 text-center">
-        <p className="font-mono text-[13px] text-ink-soft">No endpoints yet</p>
-        <p className="mx-auto mt-2 max-w-sm text-sm leading-relaxed text-ink-soft/80">
-          Add your first endpoint above — DonPay will POST a signed event there each time a
-          payment changes state.
-        </p>
-      </div>
+      <>
+        {emptyState ?? (
+          <div className="px-6 py-14 text-center">
+            <p className="font-mono text-[13px] text-ink-soft">No endpoints yet</p>
+            <p className="mx-auto mt-2 max-w-sm text-sm leading-relaxed text-ink-soft/80">
+              Add your first endpoint — DonPay will POST a signed event there each time a payment
+              changes state.
+            </p>
+          </div>
+        )}
+      </>
     );
   }
 

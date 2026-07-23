@@ -64,7 +64,7 @@ export function LinksTable({
               link={link}
               url={`${origin}/pay/${link.slug}`}
               action={
-                <span className="flex shrink-0 items-center gap-1.5">
+                <span className="flex w-32 shrink-0 items-center justify-end gap-1.5">
                   {(link.status === 'ACTIVE' || link.status === 'PAUSED') && (
                     <form
                       action={setLinkStatus.bind(

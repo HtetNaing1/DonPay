@@ -46,7 +46,7 @@ export function PaymentLinkRow({ link, url, action }: PaymentLinkRowProps) {
         </p>
       </div>
 
-      <div className="w-32 text-sm text-ink">
+      <div className="w-32 text-sm text-ink tabular-nums">
         {link.amountMode === 'FIXED' && link.amountFiat !== null ? (
           <AmountDisplay minor={link.amountFiat} currency={link.fiatCurrency} />
         ) : (
@@ -72,7 +72,7 @@ export function PaymentLinkRow({ link, url, action }: PaymentLinkRowProps) {
         {STATUS_LABEL[link.status]}
       </p>
 
-      <p className="w-16 font-mono text-[13px] text-ink-soft">
+      <p className="w-16 font-mono text-[13px] text-ink-soft tabular-nums">
         {link.useCount}
         {link.maxUses !== null && `/${link.maxUses}`}
       </p>

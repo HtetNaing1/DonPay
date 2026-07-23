@@ -1,7 +1,6 @@
 import type { Metadata } from 'next';
 import type { WebhookEndpointView } from '@donpay/shared';
-import { WebhookCreatePanel } from '@/components/organisms/webhook-create-panel';
-import { WebhookEndpointsTable } from '@/components/organisms/webhook-endpoints-table';
+import { WebhooksWorkspace } from '@/components/organisms/webhooks-workspace';
 import { merchantApiFetch } from '@/lib/api-server';
 
 export const metadata: Metadata = {
@@ -23,21 +22,8 @@ export default async function WebhooksPage() {
       </div>
 
       <div className="rise-in" style={{ '--rise-order': 1 } as React.CSSProperties}>
-        <WebhookCreatePanel />
+        <WebhooksWorkspace endpoints={endpoints} />
       </div>
-
-      <section
-        aria-labelledby="webhooks-heading"
-        className="rise-in"
-        style={{ '--rise-order': 2 } as React.CSSProperties}
-      >
-        <h2 id="webhooks-heading" className="font-display text-lg tracking-tight">
-          Your endpoints
-        </h2>
-        <div className="mt-3 overflow-hidden rounded-xl border border-hairline bg-surface">
-          <WebhookEndpointsTable endpoints={endpoints} />
-        </div>
-      </section>
     </div>
   );
 }
